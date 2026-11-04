@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from . import __version__
-from .api import athletes, auth, devices, live, users
+from .api import athletes, auth, devices, live, runs, users
 from .config import Settings, get_settings
 from .db import make_engine, make_sessionmaker
 from .gateway import Gateway
@@ -60,7 +60,7 @@ def create_app(
         summary="Athletes, consent, devices and live hub data. Sessions/scoring arrive in later milestones.",
         lifespan=lifespan,
     )
-    for module in (auth, users, athletes, devices, live):
+    for module in (auth, users, athletes, devices, runs, live):
         app.include_router(module.router)
 
     @app.get("/health", tags=["meta"])

@@ -43,13 +43,55 @@ Useful endpoints: `GET /devices`, `GET /alerts`, `GET /stations/{station}/events
 
 Settings are environment variables prefixed `SVS_` (see `svs/config.py`), e.g. `SVS_MQTT_HOST`, `SVS_DATABASE_URL=postgresql+psycopg://…`, `SVS_RUN_GATEWAY=false`.
 
+## Analysis and protocol runs
+
+`svs/analysis/` holds pure functions of stored data, so every result can be recomputed:
+
+- **`scoring.py`** classifies each trial, in this order:
+  1. false start (press during the foreperiod)
+  2. anticipation (RT under 100 ms)
+  3. no-go false alarm
+  4. wrong target
+  5. hit
+  6. correct rejection
+  7. miss
+  8. invalid (block aborted)
+
+  Outliers (more than 3 robust SDs) are flagged, never dropped. Summary statistics:
+  - RT median, mean, SD, IQR, MAD, CV, p10 and p90; accuracy; omission, commission and false-start rates
+  - **d′ and c** with the log-linear correction
+  - per-target, left/right asymmetry and central/mid/peripheral bands; histogram
+  - quality flag: insufficient data below 5 valid hits
+
+  It also does **movement-onset detection** from the wrist IMU, which splits RT into decision and movement time.
+- **`balance.py`** computes centre of pressure from the 4 load cells, then path length, mean velocity, RMS, range and the 95 % ellipse area.
+- **`protocols.py`** has five built-in protocols (simple RT, choice RT, go/no-go, peripheral, speed drill). The **seeded, balanced trial-plan generator** means the same seed always gives the same plan.
+
+API endpoints:
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/protocols` | List the built-in protocols |
+| `POST` | `/athletes/{id}/runs` | Start a run (`protocol`, `params`, optional `seed`): checks data consent and an online hub, generates the plan, sends `start_block` |
+| `GET` | `/athletes/{id}/runs` | The athlete's runs |
+| `GET` | `/runs/{id}` | Run + full analysis |
+| `POST` | `/runs/{id}/stop[?estop=true]` | Stop a running block |
+| `GET` | `/athletes/{id}/trends` | Change vs. the athlete's baseline (first 2 completed runs), labelled *unverified* until test-retest reliability exists |
+| `GET` | `/stations/{station}/blocks` | Every block, including demo blocks |
+| `GET` | `/blocks/{block_id}/analysis` | Analysis of any block |
+| `GET` | `/overview` | Dashboard aggregate |
+
+How runs behave:
+- While a block runs, analysis uses events only. Sensor streams are read once it finishes, and results are cached about 15 s later, once the streams are on disk.
+- A block with no hub events for 5 minutes is closed as aborted, with a reason.
+
 ## Tests
 
 ```bash
 .venv\Scripts\python -m pytest -q
 ```
 
-33 tests. They cover the role/visibility matrix, org isolation, consent rules (guardian for minors, supersede, withdraw), anonymise/export/delete and audit. On the gateway side they cover sequence and clock maths and simulator↔gateway runs with duplicates, drops, outage + SD backfill, reboot, Last-Will, heartbeat loss, command timeouts, e-stop and malformed input. Two end-to-end tests run over a real MQTT broker, including the authenticated WebSocket feed. Use `-m "not mqtt"` to skip the broker tests.
+45 tests. They cover the analysis engine (every classification rule, statistics, d′, plans, onset detection, sway, stream pruning) and a full run end to end; plus the role/visibility matrix, org isolation, consent rules (guardian for minors, supersede, withdraw), anonymise/export/delete and audit. On the gateway side they cover sequence and clock maths and simulator↔gateway runs with duplicates, drops, outage + SD backfill, reboot, Last-Will, heartbeat loss, command timeouts, e-stop and malformed input. Two end-to-end tests run over a real MQTT broker, including the authenticated WebSocket feed. Use `-m "not mqtt"` to skip the broker tests.
 
 ## MQTT contract (what the ESP32-S3 firmware must implement)
 

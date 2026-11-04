@@ -191,6 +191,39 @@ class AuditLog(Base):
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+# --------------------------------------------------------------------------- protocol runs
+
+
+class BlockRun(Base):
+    """One protocol block run for one athlete on one station.
+
+    The trial plan is fully determined by (protocol, params, seed) and stored as sent, so the
+    run can be repeated exactly. Results are derived from the hub events with ``block_id``.
+    """
+
+    __tablename__ = "block_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    block_id: Mapped[str] = mapped_column(String(64), unique=True)
+    org_id: Mapped[int] = mapped_column(ForeignKey("organisations.id", ondelete="CASCADE"), index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    station: Mapped[str] = mapped_column(String(64))
+    protocol: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # assessment | training
+    params: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    seed: Mapped[int] = mapped_column(Integer)
+    plan: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(16), default="sent")  # sent|running|done|aborted|failed
+    error: Mapped[str | None] = mapped_column(String(300))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary: Mapped[dict[str, Any] | None] = mapped_column(JSON)  # cached once the block is final
+
+    athlete: Mapped[Athlete] = relationship()
+
+
 # --------------------------------------------------------------------------- devices (B1)
 
 

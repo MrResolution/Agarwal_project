@@ -104,11 +104,43 @@ class ParquetSink:
         return 1
 
 
-def read_stream(root: Path, station: str, stream: str, sensor: str, boot_id: str | None = None) -> pa.Table:
-    """Load a stored stream, sorted by hub time. ``boot_id=None`` reads every boot."""
+def _prune_by_name(paths: list[Path], t_from: int | None, t_to: int | None) -> list[Path]:
+    """Within one boot, part files are written in time order and named ``part-{first_t_hub_us}-…``,
+    so file i covers [start_i, start_{i+1}). Keep only files that can overlap [t_from, t_to]."""
+    starts = []
+    for p in paths:
+        try:
+            starts.append((int(p.name.split("-")[1]), p))
+        except (IndexError, ValueError):
+            return paths  # unexpected name: don't prune
+    starts.sort()
+    keep = []
+    for i, (start, p) in enumerate(starts):
+        end = starts[i + 1][0] if i + 1 < len(starts) else None
+        if t_to is not None and start > t_to:
+            break
+        if t_from is not None and end is not None and end <= t_from:
+            continue
+        keep.append(p)
+    return keep
+
+
+def read_stream(root: Path, station: str, stream: str, sensor: str, boot_id: str | None = None,
+                t_from_us: int | None = None, t_to_us: int | None = None) -> pa.Table:
+    """Load a stored stream, sorted by hub time, optionally only ``t_from_us <= t_hub_us <= t_to_us``.
+    ``boot_id=None`` reads every boot (hub times are then not comparable across boots)."""
     base = Path(root) / station / stream / sensor
     paths = sorted((base / boot_id if boot_id else base).rglob("*.parquet"))
+    if boot_id and (t_from_us is not None or t_to_us is not None):
+        paths = _prune_by_name(paths, t_from_us, t_to_us)
     if not paths:
         return pa.table({})
-    table = ds.dataset(paths, format="parquet").to_table()
+    dataset = ds.dataset(paths, format="parquet")
+    expr = None
+    if t_from_us is not None:
+        expr = ds.field("t_hub_us") >= t_from_us
+    if t_to_us is not None:
+        upper = ds.field("t_hub_us") <= t_to_us
+        expr = upper if expr is None else expr & upper
+    table = dataset.to_table(filter=expr)
     return table.sort_by("t_hub_us")

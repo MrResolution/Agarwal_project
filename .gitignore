@@ -19,3 +19,7 @@ Thumbs.db
 # Firmware secrets (Wi-Fi password)
 firmware/svs_hub/config.h
 .pio/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

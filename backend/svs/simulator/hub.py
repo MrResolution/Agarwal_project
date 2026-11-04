@@ -98,6 +98,7 @@ class SimHub:
         self.targets = [f"T{i + 1}" for i in range(self.cfg.n_targets)]
         self._tasks: list[asyncio.Task] = []
         self._block_task: asyncio.Task | None = None
+        self._current_block: str | None = None
         self._offline = False  # simulated Wi-Fi outage: events go to the SD buffer
         self._sd_buffer: list[HubEvent] = []
         self._motion: list[tuple[int, int]] = []  # (onset_us, end_us) windows of arm movement
@@ -290,7 +291,8 @@ class SimHub:
                     await self._block_task
             await self._ack(cmd.cmd_id, True)
             if running:
-                await self.emit("block_aborted", data={"reason": cmd.cmd})
+                await self.emit("block_aborted", block_id=self._current_block, data={"reason": cmd.cmd})
+            self._current_block = None
         elif cmd.cmd == "config":
             changed = {}
             for key, value in cmd.args.items():
@@ -306,6 +308,7 @@ class SimHub:
 
     async def run_block(self, args: StartBlockArgs) -> None:
         counts = {"trials": 0, "responses": 0, "false_starts": 0}
+        self._current_block = args.block_id
         await self.emit("block_started", block_id=args.block_id, data={"n_trials": len(args.trials)})
         for spec in args.trials:
             r = await self._run_trial(args.block_id, spec)
@@ -314,6 +317,7 @@ class SimHub:
             counts["false_starts"] += r["false_start"]
         self.blocks_completed += 1
         await self.emit("block_done", block_id=args.block_id, data=counts)
+        self._current_block = None
 
     async def _run_trial(self, block_id: str, spec: TrialSpec) -> dict[str, bool]:
         cfg, rng = self.cfg, self.rng
