@@ -53,7 +53,7 @@ Settings are environment variables prefixed `SVS_` (see `svs/config.py`), e.g. `
 
 ## MQTT contract (what the ESP32-S3 firmware must implement)
 
-Defined in `svs/contract/topics.py` and `svs/contract/messages.py`; the simulator is the reference implementation.
+Defined in `svs/contract/topics.py` and `svs/contract/messages.py`; the simulator is the reference implementation. Every message, with examples and field rules, is documented in [`docs/hub-mqtt-data-scheme.md`](../docs/hub-mqtt-data-scheme.md).
 
 | Topic | Direction | QoS | Payload |
 |---|---|---|---|

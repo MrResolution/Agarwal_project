@@ -1,6 +1,6 @@
 # Hub firmware (ESP32-S3)
 
-`svs_hub/svs_hub.ino` is the reference firmware for the hub. It implements the MQTT contract in [`backend/svs/contract/`](../backend/svs/contract/); the Python simulator (`python -m svs.simulator`) implements the same contract, so anything that works with the simulator works with this firmware.
+`svs_hub/svs_hub.ino` is the reference firmware for the hub. It implements the MQTT contract in [`backend/svs/contract/`](../backend/svs/contract/), documented message by message in [`docs/hub-mqtt-data-scheme.md`](../docs/hub-mqtt-data-scheme.md); the Python simulator (`python -m svs.simulator`) implements the same contract, so anything that works with the simulator works with this firmware.
 
 > Status: written against the contract and the pin plan in `info/EyeInnovate_Components_Software_Datasets.pdf`, but **not yet compiled or run on hardware**. Expect to fix small library-API details on the first build, and check timing on the bench (research doc §10, Stage 1).
 
