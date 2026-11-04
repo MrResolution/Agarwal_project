@@ -53,6 +53,9 @@ class HubStatus(_Msg):
     battery_pct: float | None = None
     rssi: float | None = None
     uptime_s: float | None = None
+    ip: str | None = None  # hub's address on the Wi-Fi network (diagnostics)
+    mac: str | None = None
+    ssid: str | None = None
     errors: list[str] = []
     targets: list[TargetStatus] = []
     sensors: list[str] = []  # stream sensor ids this hub publishes, e.g. ["imu/wrist_r", "balance/board"]

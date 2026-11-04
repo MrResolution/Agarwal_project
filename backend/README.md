@@ -29,6 +29,8 @@ Data goes into `backend/data/` (gitignored): `svs.db`, `streams/` (Parquet) and 
 .venv\Scripts\python -m svs.simulator --demo 3 --dup 0.05 --drop 0.02 --drift-ppm 40   # 3. fake hub
 ```
 
+**With real hardware** (ESP32-S3 hub and laptop on the same router/phone hotspot), start the broker with `--lan` instead. It listens on the Wi-Fi network and advertises itself over mDNS, so the hub finds the laptop without a hard-coded IP. `GET /network` shows the address hubs should use and each connected hub's IP, SSID and signal. `python -m svs.simulator --discover` runs the simulator through the same mDNS path the firmware uses. Firmware, flashing and firewall setup are in [`../firmware/README.md`](../firmware/README.md).
+
 Without `--demo` the simulator waits for commands. You can start a block by hand with `POST /stations/station-1/commands`:
 
 ```json

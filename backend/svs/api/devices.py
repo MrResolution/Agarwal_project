@@ -13,6 +13,7 @@ from .. import audit
 from ..deps import get_db, require_staff
 from ..gateway import CommandError, Gateway
 from ..models import Device, DeviceAlert, DeviceEvent, User
+from ..network import HOSTNAME, SERVICE_TYPE, lan_ipv4_addresses
 from ..schemas import CommandIn, DeviceAlertOut, DeviceEventOut, DeviceOut
 
 router = APIRouter(tags=["devices"])
@@ -118,3 +119,26 @@ async def send_command(
 @router.get("/gateway")
 def gateway_status(request: Request, _: User = Depends(require_staff)) -> dict[str, Any]:
     return get_gateway(request).snapshot()
+
+
+@router.get("/network")
+def network_info(request: Request, _: User = Depends(require_staff)) -> dict[str, Any]:
+    """What a hub on the same Wi-Fi needs to reach this system, plus each hub's reported address."""
+    settings = request.app.state.settings
+    gw = getattr(request.app.state, "gateway", None)
+    port = settings.mqtt_port
+    hubs = []
+    if gw is not None:
+        for dev in gw.devices.values():
+            st = dev.status
+            hubs.append({"device_id": dev.device_id, "station": dev.station, "online": dev.online,
+                         "ip": st.get("ip"), "ssid": st.get("ssid"), "rssi": st.get("rssi"),
+                         "firmware": st.get("firmware")})
+    local_broker = settings.mqtt_host in ("127.0.0.1", "localhost", "0.0.0.0")
+    return {
+        "laptop_ips": lan_ipv4_addresses(),
+        "broker": {"host_for_gateway": settings.mqtt_host, "port": port, "on_this_machine": local_broker},
+        "mdns": {"hostname": HOSTNAME.rstrip("."), "service": SERVICE_TYPE, "txt": {"svs": "1"}},
+        "hub_should_connect_to": [f"{ip}:{port}" for ip in lan_ipv4_addresses()] if local_broker else [f"{settings.mqtt_host}:{port}"],
+        "hubs": hubs,
+    }

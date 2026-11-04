@@ -15,3 +15,7 @@ data/
 Thumbs.db
 .vscode/
 .idea/
+
+# Firmware secrets (Wi-Fi password)
+firmware/svs_hub/config.h
+.pio/

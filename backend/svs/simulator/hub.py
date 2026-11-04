@@ -64,6 +64,8 @@ class SimConfig:
     batch_size: int = 10
     status_interval_s: float = 2.0
     seed: int | None = None
+    ip: str | None = None  # reported in status, as real firmware reports WiFi.localIP()
+    ssid: str | None = None
 
     # behaviour model (ms)
     rt_mu: float = 230.0
@@ -204,6 +206,8 @@ class SimHub:
             battery_pct=round(self.battery_pct, 1),
             rssi=round(-50 - 10 * self.rng.random(), 1),
             uptime_s=round(time.monotonic() - self._booted_at, 1),
+            ip=self.cfg.ip,
+            ssid=self.cfg.ssid,
             targets=[TargetStatus(id=t, online=True, battery_pct=round(self.battery_pct, 1)) for t in self.targets],
             sensors=[f"imu/{s}" for s in self.cfg.imu_sensors] + [f"balance/{s}" for s in self.cfg.balance_sensors],
         )
