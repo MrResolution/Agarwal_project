@@ -120,6 +120,7 @@ export const api = {
   login: (email: string, password: string) =>
     request<{ access_token: string }>("POST", "/auth/token", { username: email, password }, true),
   me: () => request<Me>("GET", "/me"),
+  authMode: () => request<{ open_access: boolean }>("GET", "/auth/mode"),
   overview: () => request<Overview>("GET", `/overview?days=42&tz_offset_min=${new Date().getTimezoneOffset()}`),
   athletes: (q = "") => request<Athlete[]>("GET", `/athletes${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   athlete: (id: number) => request<Athlete>("GET", `/athletes/${id}`),

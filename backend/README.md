@@ -41,6 +41,10 @@ Without `--demo` the simulator waits for commands. You can start a block by hand
 
 Useful endpoints: `GET /devices`, `GET /alerts`, `GET /stations/{station}/events`, `GET /gateway` (live stats, clock-sync quality, per-channel duplicate/lost counts), and the WebSocket `ws://…/ws/stations/{station}?token=<JWT>`.
 
+**Open access (no sign-in).** For local prototype use, put `SVS_OPEN_ACCESS=true` in `backend/.env` (gitignored). The dashboard then opens without email and password:
+- Token-less requests from **this machine only** (loopback) act as the first active admin, or as `SVS_OPEN_ACCESS_EMAIL` if set. Other devices on the Wi-Fi still have to sign in, and a bad token is still rejected.
+- Delete the line to require sign-in again.
+
 Settings are environment variables prefixed `SVS_` (see `svs/config.py`), e.g. `SVS_MQTT_HOST`, `SVS_DATABASE_URL=postgresql+psycopg://…`, `SVS_RUN_GATEWAY=false`.
 
 ## Analysis and protocol runs

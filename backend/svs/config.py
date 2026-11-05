@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # Auth
     jwt_secret: str | None = None  # default: generated once and kept in data_dir/.jwt_secret
     jwt_ttl_minutes: int = 480
+    # Open access: requests from this machine (loopback) without a token act as an admin, so the
+    # dashboard opens without signing in. Off by default; for local prototype use only.
+    open_access: bool = False
+    open_access_email: str | None = None  # which account to act as; default = first active admin
 
     # MQTT / gateway
     mqtt_host: str = "127.0.0.1"

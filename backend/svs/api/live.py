@@ -11,7 +11,7 @@ import contextlib
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 
-from ..deps import user_from_token
+from ..deps import open_access_user, user_from_token
 from ..models import STAFF_ROLES
 
 router = APIRouter(tags=["live"])
@@ -22,7 +22,12 @@ async def station_feed(websocket: WebSocket, station: str, token: str = "") -> N
     app = websocket.app
     db = app.state.sessionmaker()
     try:
-        user = user_from_token(token, db, app.state.settings)
+        if token:
+            user = user_from_token(token, db, app.state.settings)
+        else:
+            user = open_access_user(db, app.state.settings, websocket.client.host if websocket.client else None)
+            if user is None:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     except HTTPException:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return

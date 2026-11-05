@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import audit
 from ..config import Settings
-from ..deps import current_user, get_db, get_settings_dep
+from ..deps import current_user, get_db, get_settings_dep, open_access_user
 from ..models import User
 from ..schemas import MeOut, TokenOut
 from ..security import create_access_token, verify_password
@@ -42,3 +42,10 @@ def login(
 @router.get("/me", response_model=MeOut)
 def me(user: User = Depends(current_user)) -> User:
     return user
+
+
+@router.get("/auth/mode")
+def auth_mode(request: Request, db: Session = Depends(get_db), settings: Settings = Depends(get_settings_dep)) -> dict:
+    """Public: whether this browser can use the dashboard without signing in."""
+    user = open_access_user(db, settings, request.client.host if request.client else None)
+    return {"open_access": user is not None}

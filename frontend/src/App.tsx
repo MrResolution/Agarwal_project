@@ -64,7 +64,7 @@ function Nav() {
   );
 }
 
-function TopBar({ me, onLogout }: { me: Me; onLogout: () => void }) {
+function TopBar({ me, onLogout, openAccess }: { me: Me; onLogout: () => void; openAccess: boolean }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const nav = useNavigate();
@@ -90,8 +90,13 @@ function TopBar({ me, onLogout }: { me: Me; onLogout: () => void }) {
         {open && (
           <div className="menu" role="menu">
             <div className="who"><div>{me.full_name}</div><div className="muted" style={{ fontSize: 13 }}>{me.email}</div>
-              <span className="chip blue mt-8" style={{ height: 24, textTransform: "capitalize" }}>{me.role}</span></div>
-            <button role="menuitem" onClick={onLogout}><LogOut size={16} />Sign out</button>
+              <div className="row mt-8" style={{ gap: 6 }}>
+                <span className="chip blue" style={{ height: 24, textTransform: "capitalize" }}>{me.role}</span>
+                {openAccess && <span className="chip amber" style={{ height: 24 }}>Open access</span>}
+              </div></div>
+            {openAccess
+              ? <div className="hint" style={{ padding: "8px 12px", lineHeight: 1.45 }}>Sign-in is turned off on this computer. Remove <span className="mono">SVS_OPEN_ACCESS</span> from <span className="mono">backend/.env</span> to require it again.</div>
+              : <button role="menuitem" onClick={onLogout}><LogOut size={16} />Sign out</button>}
           </div>
         )}
       </div>
@@ -101,15 +106,32 @@ function TopBar({ me, onLogout }: { me: Me; onLogout: () => void }) {
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
-  const [checking, setChecking] = useState(!!getToken());
+  const [checking, setChecking] = useState(true);
+  const [openAccess, setOpenAccess] = useState(false);
   const loc = useLocation();
-  const logout = useCallback(() => { setToken(null); setMe(null); }, []);
+
+  /** Signed-in token first; otherwise use open access if the API allows it for this machine. */
+  const boot = useCallback(async () => {
+    setChecking(true);
+    try {
+      if (getToken()) {
+        try { setMe(await api.me()); return; } catch { setToken(null); }
+      }
+      const mode = await api.authMode().catch(() => ({ open_access: false }));
+      setOpenAccess(mode.open_access);
+      setMe(mode.open_access ? await api.me() : null);
+    } catch {
+      setMe(null);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+  const logout = useCallback(() => { setToken(null); setMe(null); void boot(); }, [boot]);
 
   useEffect(() => {
     onAuthLost(logout);
-    if (!getToken()) return;
-    api.me().then(setMe).catch(logout).finally(() => setChecking(false));
-  }, [logout]);
+    void boot();
+  }, [boot, logout]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [loc.pathname]);
 
   if (checking) return null;
@@ -127,7 +149,7 @@ export default function App() {
   return (
     <MeCtx.Provider value={me}>
       <div className="app">
-        <TopBar me={me} onLogout={logout} />
+        <TopBar me={me} onLogout={logout} openAccess={openAccess && !getToken()} />
         <main className="main">
           <ErrorBoundary label="This page" resetKey={loc.pathname}>
             <div key={section} className="page-enter">

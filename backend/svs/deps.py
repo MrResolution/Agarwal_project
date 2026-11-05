@@ -14,7 +14,27 @@ from .config import Settings
 from .models import STAFF_ROLES, Athlete, Role, User, UserAthleteLink
 from .security import decode_access_token
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
+LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+def is_local(host: str | None) -> bool:
+    return host in LOOPBACK or (host or "").startswith("127.")
+
+
+def open_access_user(db: Session, settings: Settings, client_host: str | None) -> User | None:
+    """The account a token-less request acts as in open-access mode, or None if not allowed.
+
+    Only requests from this machine qualify, so other devices on the Wi-Fi still need to sign in.
+    """
+    if not settings.open_access or not is_local(client_host):
+        return None
+    stmt = select(User).where(User.is_active.is_(True))
+    if settings.open_access_email:
+        stmt = stmt.where(User.email == settings.open_access_email.lower())
+    else:
+        stmt = stmt.where(User.role == Role.admin).order_by(User.id)
+    return db.scalars(stmt).first()
 
 
 def get_settings_dep(request: Request) -> Settings:
@@ -47,11 +67,17 @@ def user_from_token(token: str, db: Session, settings: Settings) -> User:
 
 
 def current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_dep),
 ) -> User:
-    return user_from_token(token, db, settings)
+    if token:
+        return user_from_token(token, db, settings)
+    user = open_access_user(db, settings, request.client.host if request.client else None)
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+    return user
 
 
 def require_roles(*roles: Role):
