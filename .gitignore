@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Local runtime data (SQLite DB, Parquet streams, generated secrets)
+backend/data/
+data/
+.env
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Firmware secrets (Wi-Fi password)
+firmware/svs_hub/config.h
+.pio/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Body-tracking model files for offline use (downloaded, not committed)
+frontend/public/models/*.task
+frontend/*.tsbuildinfo

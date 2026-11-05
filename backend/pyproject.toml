@@ -1,0 +1,38 @@
+[project]
+name = "svs-backend"
+version = "0.1.0"
+description = "Backend for the Sports Vision & Reflex assessment/training system: API, device gateway and hub simulator"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-multipart>=0.0.9",
+    "email-validator>=2.1",
+    "pyjwt>=2.8",
+    "argon2-cffi>=23.1",
+    "paho-mqtt>=2.1",
+    "pyarrow>=16",
+    "numpy>=1.26",
+    "amqtt>=0.12",
+    "zeroconf>=0.130",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["svs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["mqtt: end-to-end tests that start a real MQTT broker on localhost"]
