@@ -9,7 +9,7 @@ An affordable, portable, and smart training system combining LED reaction target
 - **[`frontend/`](frontend/README.md)**: coach dashboard (React + TypeScript): dashboard, live session, analysis, athletes, devices.
 - **[`backend/`](backend/README.md)**: FastAPI API, device gateway, analysis engine (reaction scoring, decision/movement split, balance), hub simulator.
 - **[`firmware/`](firmware/README.md)**: reference ESP32-S3 hub firmware.
-- **`docs/`**: [dashboard functional research](docs/dashboard-functional-research.md), the [hub MQTT data scheme](docs/hub-mqtt-data-scheme.md) and [screenshots](docs/screenshots/).
+- **[`docs/`](docs/README.md)**: project and dashboard documentation (see [Documentation](#documentation) below), plus the [screenshots](docs/screenshots/).
 - **`info/`**
   - [`Sports Vision & Reflex System Documentation.md`](info/Sports%20Vision%20&%20Reflex%20System%20Documentation.md): Comprehensive system documentation, hardware architecture, sensor integration, state machines, and implementation blueprints.
   - `EyeInnovate_Components_Software_Datasets.pdf`: Component specifications, software overview, and dataset details.
@@ -22,7 +22,21 @@ From `backend/`, run each in its own terminal:
 2. `uvicorn --factory svs.main:create_app`
 3. `python -m svs.simulator --discover`
 
-Then, from `frontend/`, run `npm install && npm run dev` and open the URL it prints.
+Then, from `frontend/`, run `npm install && npm run dev` and open the URL it prints. First-time install (virtual environment, database, admin account) is in [Setup and operations](docs/setup-and-operations.md).
+
+## Documentation
+
+| Document | For |
+|---|---|
+| [Project overview](docs/project-overview.md) | What the system is, the physical setup, key ideas, vocabulary, one run end to end |
+| [Dashboard guide](docs/dashboard-guide.md) | Coaches and therapists: every page and card, with screenshots |
+| [Metrics reference](docs/metrics-reference.md) | Exactly how each number is calculated: classification, RT statistics, d′, decision/movement split, balance, skill radar, insights, baselines |
+| [Setup and operations](docs/setup-and-operations.md) | Install, run, simulator options, real hardware, open access, settings, backups, alerts, troubleshooting |
+| [Architecture](docs/architecture.md) | Developers: components, data model, run lifecycle, gateway, frontend, security, tests |
+| [API reference](docs/api-reference.md) | Endpoints, roles, request bodies and the live WebSocket feed |
+| [Hub MQTT data scheme](docs/hub-mqtt-data-scheme.md) | Firmware: the message contract the ESP32-S3 hub must implement |
+
+The [docs index](docs/README.md) has reading paths for each role.
 
 ## Screenshots
 

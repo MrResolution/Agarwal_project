@@ -7,7 +7,9 @@ Milestones **B0–B1** from [`docs/dashboard-functional-research.md`](../docs/da
 | **B0** | FastAPI app, SQLAlchemy models + Alembic migrations, login (JWT) with roles, athlete/patient profiles, consent records, data-subject export/anonymise/delete, append-only audit log |
 | **B1** | MQTT contract, a **simulated ESP32-S3 hub** with fault injection, and the **device gateway**: validation, duplicate suppression, gap detection, hub→server clock mapping, events → SQL, streams → Parquet, device health/alerts, commands with acks, and a live WebSocket feed |
 
-Sessions, trial plans and scoring come next (B2–B3). The UI is deliberately out of scope for now. Drive everything through the API docs at `/docs`.
+On top of that: protocol runs with seeded trial plans, the analysis engine (scoring, decision/movement split, balance) and the dashboard aggregates that the [coach dashboard](../frontend/README.md) uses. Every endpoint can also be tried in the API docs at `/docs`.
+
+Full documentation: [Setup and operations](../docs/setup-and-operations.md), [Architecture](../docs/architecture.md), [API reference](../docs/api-reference.md) and [Metrics reference](../docs/metrics-reference.md).
 
 ## Setup (Windows PowerShell; on Linux/macOS use `.venv/bin/`)
 
@@ -95,7 +97,7 @@ How runs behave:
 .venv\Scripts\python -m pytest -q
 ```
 
-45 tests. They cover the analysis engine (every classification rule, statistics, d′, plans, onset detection, sway, stream pruning) and a full run end to end; plus the role/visibility matrix, org isolation, consent rules (guardian for minors, supersede, withdraw), anonymise/export/delete and audit. On the gateway side they cover sequence and clock maths and simulator↔gateway runs with duplicates, drops, outage + SD backfill, reboot, Last-Will, heartbeat loss, command timeouts, e-stop and malformed input. Two end-to-end tests run over a real MQTT broker, including the authenticated WebSocket feed. Use `-m "not mqtt"` to skip the broker tests.
+49 tests. They cover open access (loopback only, bad tokens still rejected), the analysis engine (every classification rule, statistics, d′, plans, onset detection, sway, stream pruning) and a full run end to end; plus the role/visibility matrix, org isolation, consent rules (guardian for minors, supersede, withdraw), anonymise/export/delete and audit. On the gateway side they cover sequence and clock maths and simulator↔gateway runs with duplicates, drops, outage + SD backfill, reboot, Last-Will, heartbeat loss, command timeouts, e-stop and malformed input. Two end-to-end tests run over a real MQTT broker, including the authenticated WebSocket feed. Use `-m "not mqtt"` to skip the broker tests.
 
 ## MQTT contract (what the ESP32-S3 firmware must implement)
 

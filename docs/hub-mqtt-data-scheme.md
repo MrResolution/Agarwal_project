@@ -4,7 +4,7 @@
 **Applies to:** ESP32-S3 hub firmware (`firmware/svs_hub/`), the hub simulator, and the device gateway
 **Source of truth:** [`backend/svs/contract/messages.py`](../backend/svs/contract/messages.py) and [`topics.py`](../backend/svs/contract/topics.py). If this document and the code disagree, the code wins. Please report the mismatch.
 
-The ESP32 does not broadcast to the network. It **publishes JSON messages to the MQTT broker** running on the laptop, and the device gateway subscribes to them. The hub and laptop are on the same Wi-Fi network (router or phone hotspot). The hub finds the broker through mDNS (see [Broker discovery](#broker-discovery)).
+The ESP32 does not broadcast to the network. It **publishes JSON messages to the MQTT broker** running on the laptop, and the device gateway subscribes to them. The hub and laptop are on the same Wi-Fi network (router or phone hotspot). The hub finds the broker through mDNS (see [Broker discovery](#8-broker-discovery)).
 
 ---
 
