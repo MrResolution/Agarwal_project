@@ -15,9 +15,11 @@ export function toDate(iso: string): Date {
 export function axisLabels(isos: string[]): string[] {
   const ds = isos.map(toDate);
   const sameDay = ds.length > 0 && ds.every((d) => d.toDateString() === ds[0]!.toDateString());
-  return ds.map((d) => sameDay
+  const labels = ds.map((d) => sameDay
     ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
     : d.toLocaleDateString(undefined, { day: "2-digit", month: "short" }));
+  // Identical labels are useless on an axis: fall back to run numbers.
+  return new Set(labels).size < labels.length ? labels.map((_, i) => `Run ${i + 1}`) : labels;
 }
 export function when(iso: string | null | undefined): string {
   if (!iso) return "–";

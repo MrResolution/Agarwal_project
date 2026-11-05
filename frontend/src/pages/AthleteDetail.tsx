@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Pencil, Play, ShieldCheck, ShieldOff } from "lucide-react";
+import { History, Pencil, Play, ShieldCheck, ShieldOff, TrendingUp, UserRound } from "lucide-react";
 import { api, getToken } from "../api";
 import { LineChart } from "../charts";
 import { axisLabels, initials, ms, pct, useAsync, when } from "../lib";
@@ -37,7 +37,7 @@ export default function AthleteDetail() {
     <>
       <div className="headline">
         <span className="initials" style={{ width: 60, height: 60, fontSize: 20 }}>{initials(a.display_name, a.code.slice(-2))}</span>
-        <div style={{ marginRight: "auto" }}>
+        <div className="title">
           <h1>{a.display_name || a.code}</h1>
           <div className="sub">{a.code} · {a.group}{a.sport ? ` · ${a.sport}` : ""}{a.position ? ` · ${a.position}` : ""}{a.is_minor ? " · minor" : ""}</div>
         </div>
@@ -47,14 +47,14 @@ export default function AthleteDetail() {
 
       <div className="grid g-dash">
         <div className="span-12 kpis">
-          <Kpi label="Latest median RT" value={ms(last?.median_rt)} unit="ms" note={done[0] ? done[0].protocol_name : "no completed run"} />
-          <Kpi label="Latest accuracy" value={last?.accuracy != null ? (last.accuracy * 100).toFixed(0) : "–"} unit="%" />
-          <Kpi label="Decision time" value={ms(last?.premotor_median)} unit="ms" note="stimulus → movement onset" />
-          <Kpi label="Completed runs" value={done.length} note={`${(runs.data ?? []).length} total`} />
-          <Kpi label="Data consent" value={a.consent.data ? "On file" : "Missing"} note={`video ${a.consent.video ? "yes" : "no"} · research ${a.consent.research ? "yes" : "no"}`} />
+          <Kpi i={0} label="Latest median RT" value={ms(last?.median_rt)} unit="ms" note={done[0] ? done[0].protocol_name : "no completed run"} />
+          <Kpi i={1} label="Latest accuracy" value={last?.accuracy != null ? (last.accuracy * 100).toFixed(0) : "–"} unit="%" />
+          <Kpi i={2} label="Decision time" value={ms(last?.premotor_median)} unit="ms" note="stimulus → movement onset" />
+          <Kpi i={3} label="Completed runs" value={done.length} note={`${(runs.data ?? []).length} total`} />
+          <Kpi i={4} label="Data consent" value={a.consent.data ? "On file" : "Missing"} note={`video ${a.consent.video ? "yes" : "no"} · research ${a.consent.research ? "yes" : "no"}`} />
         </div>
 
-        <Card className="span-8" title="Progress vs baseline" sub="Median reaction time per completed run. Changes stay unverified until test-retest reliability is measured.">
+        <Card className="span-8" i={5} icon={<TrendingUp size={18} />} iconTone="blue" title="Progress vs baseline" sub="Median reaction time per completed run. Changes stay unverified until test-retest reliability is measured.">
           {!trends.data ? <Skeleton h={220} /> : !current ? <Empty>Complete a run to start tracking progress.</Empty> : (
             <>
               {protos.length > 1 && (
@@ -76,7 +76,17 @@ export default function AthleteDetail() {
           )}
         </Card>
 
-        <Card className="span-4" title="Consent" action={<button className="btn sm primary" onClick={() => setConsentOpen(true)} disabled={!!a.anonymised_at}>Record</button>}>
+        <Card className="span-4 t-6" i={6} icon={<ShieldCheck size={18} />} iconTone="lime" title="Consent" action={<button className="btn sm primary" onClick={() => setConsentOpen(true)} disabled={!!a.anonymised_at}>Record</button>}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
+            {(["data", "video", "research"] as const).map((k) => (
+              <div key={k} style={{ background: a.consent[k] ? "var(--green-2)" : "var(--bg)", borderRadius: 14, padding: "10px 12px" }}>
+                {a.consent[k] ? <ShieldCheck size={16} color="#18a957" /> : <ShieldOff size={16} color="#9aa0aa" />}
+                <div style={{ textTransform: "capitalize", fontSize: 14, marginTop: 6 }}>{k}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{a.consent[k] ? "on file" : k === "data" ? "required" : "optional"}</div>
+              </div>
+            ))}
+          </div>
+          <div className="muted" style={{ fontSize: 12.5, marginBottom: 4 }}>History</div>
           {!consents.data ? <Skeleton h={120} /> : !consents.data.length ? <Empty>No consent recorded. Sessions cannot start without data consent.</Empty> :
             consents.data.slice().reverse().map((c) => (
               <div key={c.id} className="list-item">
@@ -90,7 +100,7 @@ export default function AthleteDetail() {
             ))}
         </Card>
 
-        <Card className="span-8" title="Runs" sub="Click a run for the full analysis">
+        <Card className="span-8" i={7} icon={<History size={18} />} title="Runs" sub="Click a run for the full analysis">
           {!runs.data ? <Skeleton h={160} /> : !runs.data.length ? <Empty>No runs yet.</Empty> : (
             <div className="scroll-x"><table className="table">
               <thead><tr><th>Protocol</th><th>Status</th><th>Trials</th><th>Median RT</th><th>Accuracy</th><th>d′</th><th>Decision</th><th>When</th></tr></thead>
@@ -107,7 +117,7 @@ export default function AthleteDetail() {
           )}
         </Card>
 
-        <Card className="span-4" title="Profile">
+        <Card className="span-4 t-6" i={8} icon={<UserRound size={18} />} title="Profile">
           {[["Dominant hand", a.dominant_hand], ["Dominant foot", a.dominant_foot], ["Birth year", a.birth_year], ["Visual correction", a.visual_correction], ["Goals", a.goals]].map(([k, v]) => (
             <div key={String(k)} className="row between" style={{ padding: "9px 0", borderBottom: "1px solid var(--line)", fontSize: 14, alignItems: "flex-start" }}>
               <span className="muted">{k}</span><span style={{ textAlign: "right", maxWidth: "60%" }}>{v ?? "–"}</span>

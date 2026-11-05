@@ -1,4 +1,4 @@
-import { Check, Cpu, Radio, Wifi } from "lucide-react";
+import { Activity, Bell, Check, Cpu, Database, Radio, ShieldAlert, Unplug, Wifi } from "lucide-react";
 import { api } from "../api";
 import { Gauge } from "../charts";
 import { useAsync, when } from "../lib";
@@ -25,21 +25,21 @@ export default function Devices() {
   return (
     <>
       <div className="headline">
-        <div style={{ marginRight: "auto" }}>
+        <div className="title">
           <h1>Devices</h1>
           <div className="sub">Hubs, network setup, data quality and alerts</div>
         </div>
       </div>
       <div className="grid g-dash">
         <div className="span-12 kpis">
-          <Kpi label="Gateway" value={g ? (g.connected ? "Connected" : "Down") : "–"} note={g ? `${g.stats?.messages ?? 0} messages` : undefined} icon={<Radio size={14} />} />
-          <Kpi label="Events stored" value={g?.stats?.events ?? 0} note={`${g?.stats?.duplicates ?? 0} duplicates dropped`} />
-          <Kpi label="Samples streamed" value={(g?.stats?.stream_samples ?? 0).toLocaleString()} note={`${g?.parquet?.files_written ?? 0} Parquet files`} />
-          <Kpi label="Lost messages" value={g?.stats?.gaps ?? 0} note="gap reports" />
-          <Kpi label="Rejected" value={g?.stats?.invalid ?? 0} note="malformed messages" />
+          <Kpi i={0} label="Gateway" value={g ? (g.connected ? "Connected" : "Down") : "–"} note={g ? `${g.stats?.messages ?? 0} messages` : undefined} icon={<Radio size={14} />} />
+          <Kpi i={1} icon={<Database size={14} />} label="Events stored" value={g?.stats?.events ?? 0} note={`since gateway start · ${g?.stats?.duplicates ?? 0} duplicates dropped`} />
+          <Kpi i={2} icon={<Activity size={14} />} label="Samples streamed" value={(g?.stats?.stream_samples ?? 0).toLocaleString()} note={`since gateway start · ${g?.parquet?.files_written ?? 0} files`} />
+          <Kpi i={3} icon={<Unplug size={14} />} label="Lost messages" value={g?.stats?.gaps ?? 0} note="gap reports" />
+          <Kpi i={4} icon={<ShieldAlert size={14} />} label="Rejected" value={g?.stats?.invalid ?? 0} note="malformed messages" />
         </div>
 
-        <Card className="span-8" title="Hubs">
+        <Card className="span-8" i={5} icon={<Cpu size={18} />} iconTone="blue" title="Hubs" sub="Live status from each hub's heartbeat">
           {!devices.data ? <Skeleton h={160} /> : !devices.data.length ? <Empty icon={<Cpu />}>No hub has connected yet. Power one on, or run the simulator.</Empty> :
             devices.data.map((d) => {
               const s = d.last_status ?? {};
@@ -61,9 +61,23 @@ export default function Devices() {
                 </div>
               );
             })}
+          {devices.data && devices.data.length > 0 && (() => {
+            const ds = devices.data!;
+            const targets = ds.flatMap((d) => (d.last_status?.targets ?? []) as { online: boolean }[]);
+            const sensors = ds.reduce((n, d) => n + ((d.last_status?.sensors ?? []) as string[]).length, 0);
+            const up = Math.max(0, ...ds.map((d) => Number(d.last_status?.uptime_s ?? 0)));
+            return (
+              <div className="stat-row" style={{ gridTemplateColumns: "repeat(4, minmax(0,1fr))" }}>
+                <div><div className="v">{ds.filter((d) => d.online).length}<small>/{ds.length}</small></div><div className="l">hubs online</div></div>
+                <div><div className="v">{targets.filter((t) => t.online).length}<small>/{targets.length}</small></div><div className="l">targets ready</div></div>
+                <div><div className="v">{sensors}</div><div className="l">sensor streams</div></div>
+                <div><div className="v">{up >= 3600 ? `${(up / 3600).toFixed(1)}` : `${Math.round(up / 60)}`}<small>{up >= 3600 ? "h" : "min"}</small></div><div className="l">longest uptime</div></div>
+              </div>
+            );
+          })()}
         </Card>
 
-        <Card className="span-4" title="Connect a hub" sub="Router or phone hotspot">
+        <Card className="span-4" i={6} icon={<Wifi size={18} />} iconTone="lime" title="Connect a hub" sub="Router or phone hotspot">
           {!net.data ? <Skeleton h={160} /> : <>
             <div className="muted" style={{ fontSize: 13 }}>Hubs on the same Wi-Fi connect to</div>
             {net.data.hub_should_connect_to.map((a) => <div key={a} className="big mono" style={{ fontSize: 22, marginTop: 6 }}>{a}</div>)}
@@ -83,7 +97,7 @@ export default function Devices() {
           </>}
         </Card>
 
-        <Card className="span-12" title="Alerts" sub="Newest first">
+        <Card className="span-12" i={7} icon={<Bell size={18} />} title="Alerts" sub="Newest first">
           {!alerts.data ? <Skeleton h={140} /> : !alerts.data.length ? <Empty>No alerts.</Empty> : (
             <div className="scroll-x" style={{ maxHeight: 380, overflowY: "auto" }}><table className="table">
               <thead><tr><th>When</th><th>Severity</th><th>Kind</th><th>Message</th><th>Device</th><th></th></tr></thead>

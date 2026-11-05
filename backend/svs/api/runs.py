@@ -288,14 +288,22 @@ def overview(request: Request, days: int = 42, tz_offset_min: int = 0, db: Sessi
     local = timezone(timedelta(minutes=-max(-840, min(840, tz_offset_min))))
     athletes = list(db.scalars(visible_athletes(user)))
     runs = list(db.scalars(select(BlockRun).where(BlockRun.org_id == user.org_id).order_by(BlockRun.created_at.desc()).limit(1000)))
+    # A just-finished run is only cached ~15 s after it ends; until then use its live analysis
+    # so it shows up in rankings and the recent list straight away.
+    live: dict[int, dict[str, Any]] = {}
     for run in runs[:20]:
         if run.status not in FINAL or run.summary is None:
-            refresh_run(db, run, request)
+            analysis = refresh_run(db, run, request)
+            if run.summary is None and run.status == "done" and analysis:
+                live[run.id] = analysis["summary"]
+
+    def summ(r: BlockRun) -> dict[str, Any] | None:
+        return r.summary or live.get(r.id)
 
     def aware(d: datetime) -> datetime:
         return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
-    done = [r for r in runs if r.status == "done" and r.summary]
+    done = [r for r in runs if r.status == "done" and summ(r)]
     week = [r for r in runs if aware(r.created_at) >= week_ago]
     latest_by_athlete: dict[int, BlockRun] = {}
     for r in done:
@@ -310,8 +318,8 @@ def overview(request: Request, days: int = 42, tz_offset_min: int = 0, db: Sessi
         d = aware(r.created_at).astimezone(local).date().isoformat()
         if d in per_day:
             per_day[d] += 1
-    rts = [_compact(r.summary)["median_rt"] for r in done if _compact(r.summary)["median_rt"]]
-    accs = [_compact(r.summary)["accuracy"] for r in done if _compact(r.summary)["accuracy"] is not None]
+    rts = [_compact(summ(r))["median_rt"] for r in done if _compact(summ(r))["median_rt"]]
+    accs = [_compact(summ(r))["accuracy"] for r in done if _compact(summ(r))["accuracy"] is not None]
     devices = list(db.scalars(select(Device)))
     open_alerts = db.scalar(select(func.count()).select_from(DeviceAlert).where(
         DeviceAlert.resolved_at.is_(None), DeviceAlert.severity != "info")) or 0
@@ -328,13 +336,67 @@ def overview(request: Request, days: int = 42, tz_offset_min: int = 0, db: Sessi
         "devices_online": sum(1 for d in devices if d.online),
         "devices_total": len(devices),
         "open_alerts": open_alerts,
-        "recent_runs": [run_out(r) | {"athlete_code": by_id[r.athlete_id].code if r.athlete_id in by_id else None,
+        "recent_runs": [run_out(r) | {"summary": _compact(summ(r)) if summ(r) else None, "athlete_code": by_id[r.athlete_id].code if r.athlete_id in by_id else None,
                                       "athlete_name": by_id[r.athlete_id].display_name if r.athlete_id in by_id else None}
                         for r in runs[:8]],
         "leaderboard": sorted(
             [{"athlete_id": a, "code": by_id[a].code, "name": by_id[a].display_name, "sport": by_id[a].sport,
-              "protocol": r.protocol, **{k: _compact(r.summary)[k] for k in ("median_rt", "accuracy")}}
+              "protocol": r.protocol, **{k: _compact(summ(r))[k] for k in ("median_rt", "accuracy")}}
              for a, r in latest_by_athlete.items() if a in by_id],
             key=lambda x: x["median_rt"] or 1e9)[:8],
+        # Rankings are only meaningful within one protocol (research doc: never compare across
+        # materially different protocols), so give one leaderboard per protocol.
+        "leaderboards": _leaderboards(done, by_id, summ),
         "athletes_without_consent": sum(1 for a in athletes if not has_active_consent(a, ConsentType.data)),
     }
+
+
+@router.get("/athletes-stats")
+def athletes_stats(request: Request, db: Session = Depends(get_db), user: User = Depends(require_staff)) -> dict[int, dict[str, Any]]:
+    """Per-athlete run summary for list views: counts, latest result and recent median-RT trend."""
+    ids = [a.id for a in db.scalars(visible_athletes(user))]
+    if not ids:
+        return {}
+    runs = list(db.scalars(select(BlockRun).where(BlockRun.athlete_id.in_(ids)).order_by(BlockRun.created_at)))
+    week_ago = utcnow() - timedelta(days=7)
+    out: dict[int, dict[str, Any]] = {i: {"runs": 0, "completed": 0, "this_week": 0, "last_run_at": None, "latest": None, "trend": []} for i in ids}
+    for r in runs:
+        st = out[r.athlete_id]
+        st["runs"] += 1
+        created = r.created_at if r.created_at.tzinfo else r.created_at.replace(tzinfo=timezone.utc)
+        if created >= week_ago:
+            st["this_week"] += 1
+        st["last_run_at"] = r.created_at
+        if r.status in ("sent", "running"):
+            refresh_run(db, r, request)  # may have finished since it was last looked at
+        if r.status == "done":
+            st["completed"] += 1
+            summary = r.summary
+            if summary is None:  # just finished: not cached yet, use the live analysis
+                analysis = refresh_run(db, r, request)
+                summary = r.summary or (analysis["summary"] if analysis else None)
+            if not summary:
+                continue
+            c = _compact(summary)
+            st["latest"] = {"protocol": r.protocol, "median_rt": c["median_rt"], "accuracy": c["accuracy"], "run_id": r.id}
+            if c["median_rt"] is not None:
+                st["trend"] = (st["trend"] + [c["median_rt"]])[-10:]
+    return out
+
+
+def _leaderboards(done: list[BlockRun], by_id: dict, summ) -> dict[str, list[dict[str, Any]]]:
+    latest: dict[tuple[str, int], BlockRun] = {}
+    for r in done:  # newest first, so setdefault keeps the latest run per (protocol, athlete)
+        if r.athlete_id in by_id:
+            latest.setdefault((r.protocol, r.athlete_id), r)
+    boards: dict[str, list[dict[str, Any]]] = {}
+    for (proto, aid), r in latest.items():
+        c = _compact(summ(r))
+        if c["median_rt"] is None or c["quality"] != "ok":
+            continue
+        a = by_id[aid]
+        boards.setdefault(proto, []).append({
+            "athlete_id": aid, "code": a.code, "name": a.display_name, "sport": a.sport, "protocol": proto,
+            "run_id": r.id, "median_rt": c["median_rt"], "accuracy": c["accuracy"], "at": r.created_at,
+        })
+    return {p: sorted(rows, key=lambda x: x["median_rt"])[:8] for p, rows in boards.items()}

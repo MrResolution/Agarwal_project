@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Download, Lightbulb, RefreshCw } from "lucide-react";
+import {
+  Activity, ChevronLeft, ChevronRight, Crosshair, Download, Footprints, Layers, Lightbulb, ListOrdered, RefreshCw, SplitSquareHorizontal,
+  Target, Timer, BarChart3, ShieldAlert, Sigma,
+} from "lucide-react";
+
+const PROTO_LABEL: Record<string, string> = {
+  simple_rt: "Simple reaction", choice_rt: "Choice reaction", go_nogo: "Go / No-Go", peripheral: "Peripheral response", speed_drill: "Speed drill",
+};
 import { api, type Analysis, type Run } from "../api";
 import { CopPlot, Histogram, SplitBar, TargetArc, TrialStrip } from "../charts";
-import { insights, ms, num, pct, RESULT_COLOUR, RESULT_LABEL, rtColour, useAsync, when } from "../lib";
-import { Card, Empty, Kpi, Skeleton, StatusChip } from "../ui";
+import { insights, ms, num, RESULT_COLOUR, RESULT_LABEL, rtColour, useAsync, when } from "../lib";
+import { Card, CountUp, Empty, Kpi, Skeleton, StatusChip } from "../ui";
 
 export default function AnalysisPage() {
   const { runId, blockId } = useParams();
@@ -13,32 +20,49 @@ export default function AnalysisPage() {
   const athletes = useAsync(() => api.athletes(), []);
   const names = new Map((athletes.data ?? []).map((a) => [a.id, a.display_name || a.code]));
   const selected = runId ? `run:${runId}` : blockId ? `block:${blockId}` : null;
+  const [filter, setFilter] = useState<"athlete" | "all">("athlete");
+  const railRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (selected || !blocks.data?.length) return;
-    const first = blocks.data[0]!;
+    const first = blocks.data.find((b) => b.run_id) ?? blocks.data[0]!;
     nav(first.run_id ? `/analysis/run/${first.run_id}` : `/analysis/block/${first.block_id}`, { replace: true });
   }, [blocks.data, selected, nav]);
+  useEffect(() => {
+    railRef.current?.querySelector(".rail-item.on")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [selected, blocks.data]);
+
+  const shown = (blocks.data ?? []).filter((b) => filter === "all" || b.run_id);
+  const scroll = (dx: number) => railRef.current?.scrollBy({ left: dx, behavior: "smooth" });
 
   return (
     <>
       <div className="headline">
-        <div style={{ marginRight: "auto" }}>
+        <div className="title">
           <h1>Analysis</h1>
           <div className="sub">Reaction scoring, decision vs movement split, target heatmap and balance, per block</div>
         </div>
       </div>
       <div className="grid g-dash">
-        <Card className="span-12" title="Blocks" sub="Most recent first, including demo blocks run without an athlete">
-          {!blocks.data ? <Skeleton h={80} /> : !blocks.data.length ? <Empty>No blocks recorded yet.</Empty> : (
-            <div className="row wrap" style={{ gap: 8 }}>
-              {blocks.data.slice(0, 18).map((b) => {
+        <Card className="span-12" i={0} icon={<Layers size={18} />} iconTone="blue" title="Blocks" sub="Most recent first"
+          action={<>
+            <div className="seg hide-sm">
+              <button className={filter === "athlete" ? "on" : ""} onClick={() => setFilter("athlete")}>Athlete runs</button>
+              <button className={filter === "all" ? "on" : ""} onClick={() => setFilter("all")}>Include demo</button>
+            </div>
+            <button className="round-link" onClick={() => scroll(-480)} aria-label="Scroll left" style={{ transform: "none" }}><ChevronLeft size={16} /></button>
+            <button className="round-link" onClick={() => scroll(480)} aria-label="Scroll right" style={{ transform: "none" }}><ChevronRight size={16} /></button>
+          </>}>
+          {!blocks.data ? <Skeleton h={92} /> : !shown.length ? <Empty icon={<Layers size={20} />}>No blocks recorded yet.</Empty> : (
+            <div className="rail" ref={railRef}>
+              {shown.slice(0, 40).map((b, i) => {
                 const key = b.run_id ? `run:${b.run_id}` : `block:${b.block_id}`;
                 return (
-                  <button key={b.block_id} className={`chip ${key === selected ? "dark" : ""}`} style={{ height: 34, cursor: "pointer", border: 0 }}
+                  <button key={b.block_id} className={`rail-item ${key === selected ? "on" : ""}`} style={{ animation: `rise .4s var(--ease) ${Math.min(i, 10) * 30}ms both` }}
                     onClick={() => nav(b.run_id ? `/analysis/run/${b.run_id}` : `/analysis/block/${b.block_id}`)}>
-                    {b.athlete_id ? names.get(b.athlete_id) ?? "Athlete" : "Demo"} · {(b.protocol ?? "block").replace("_", " ")} · {when(b.last_event_at)}
-                    {b.status !== "done" && <span style={{ opacity: .7 }}>({b.status})</span>}
+                    <div className="t"><span className="ellipsis">{b.athlete_id ? names.get(b.athlete_id) ?? "Athlete" : "Demo block"}</span><StatusChip status={b.status} /></div>
+                    <div className="s ellipsis">{PROTO_LABEL[b.protocol ?? ""] ?? "Self-run block"} · {when(b.last_event_at)}</div>
+                    <div className="m">{b.stimuli}<small>trials</small></div>
                   </button>
                 );
               })}
@@ -73,7 +97,7 @@ function Detail({ runId, blockId, athleteName }: { runId: number | null; blockId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, blockId, a?.status, run?.status]);
 
-  if (loading && !a) return <div className="span-12"><Skeleton h={420} /></div>;
+  if (loading && !a) return <><div className="span-12 kpis">{[0, 1, 2, 3, 4].map((k) => <Skeleton key={k} h={104} />)}</div><div className="span-8"><Skeleton h={300} /></div><div className="span-4"><Skeleton h={300} /></div></>;
   if (error) return <Card className="span-12"><Empty>{error}</Empty></Card>;
   if (!a) return <Card className="span-12"><Empty>{run?.status === "failed" ? `The hub rejected this run: ${run.error}` : "Waiting for the first events…"}</Empty></Card>;
 
@@ -100,60 +124,60 @@ function Detail({ runId, blockId, athleteName }: { runId: number | null; blockId
 
   return (
     <>
-      <div className="span-12 row wrap" style={{ gap: 12 }}>
-        <h2 style={{ fontSize: 24, marginRight: "auto" }}>{title}</h2>
+      <div className="span-12 row wrap reveal" style={{ gap: 10, ["--i" as string]: 1 }}>
+        <div className="grow" style={{ minWidth: 240 }}>
+          <h2 style={{ fontSize: 24 }}>{title}</h2>
+          <div className="hint mt-8">{a.started_at_us ? new Date(a.started_at_us / 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ""} · {a.trials.length} trials · {a.duration_s}s{run ? ` · seed ${run.seed}` : ""}</div>
+        </div>
         <StatusChip status={a.status} />
-        {s.quality !== "ok" && <span className="chip amber">insufficient data</span>}
-        <span className="chip">{a.trials.length} trials · {a.duration_s}s</span>
-        {run && <span className="chip">seed {run.seed}</span>}
-        {run && <Link className="chip blue" to={`/athletes/${run.athlete_id}`}>Athlete profile</Link>}
-        <button className="btn sm ghost" onClick={load}><RefreshCw size={14} />Refresh</button>
-        <button className="btn sm" onClick={exportCsv}><Download size={14} />Export CSV</button>
+        {s.quality !== "ok" && <span className="chip amber">Insufficient data</span>}
+        {run && <Link className="btn sm ghost" to={`/athletes/${run.athlete_id}`}>Athlete profile</Link>}
+        <button className="btn sm ghost" onClick={load} aria-label="Refresh"><RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : undefined }} />Refresh</button>
+        <button className="btn sm primary" onClick={exportCsv}><Download size={14} />Export CSV</button>
       </div>
 
       <div className="span-12 kpis">
-        <Kpi label="Median reaction" value={ms(s.rt.median)} unit="ms" note={`mean ${ms(s.rt.mean)} · IQR ${ms(s.rt.iqr)}`} />
-        <Kpi label="Accuracy" value={s.accuracy == null ? "–" : (s.accuracy * 100).toFixed(0)} unit="%" note={`${s.counts.hit}/${s.go_trials} go trials hit`} />
-        <Kpi label="Sensitivity d′" value={num(s.dprime)} note={s.nogo_trials ? `${s.counts.false_alarm}/${s.nogo_trials} no-go presses` : "no no-go trials"} />
-        <Kpi label="Consistency (CV)" value={num(s.rt.cv)} note={`SD ${ms(s.rt.sd)} ms · ${s.excluded_outliers} outlier(s)`} />
-        <Kpi label="False starts" value={pct(s.false_start_rate)} note={`${s.counts.false_start + s.counts.anticipation} early / anticipatory`} />
+        <Kpi i={2} icon={<Timer size={14} />} label="Median reaction" value={<CountUp value={s.rt.median} />} unit="ms" note={`mean ${ms(s.rt.mean)} · IQR ${ms(s.rt.iqr)}`} />
+        <Kpi i={3} icon={<Target size={14} />} label="Accuracy" value={s.accuracy == null ? "–" : <CountUp value={s.accuracy * 100} />} unit="%" note={`${s.counts.hit}/${s.go_trials} go trials hit`} />
+        <Kpi i={4} icon={<Sigma size={14} />} label="Sensitivity d′" value={s.dprime == null ? "–" : <CountUp value={s.dprime} decimals={2} />} note={s.nogo_trials ? `${s.counts.false_alarm}/${s.nogo_trials} no-go presses` : "no no-go trials"} />
+        <Kpi i={5} icon={<Activity size={14} />} label="Consistency (CV)" value={s.rt.cv == null ? "–" : <CountUp value={s.rt.cv} decimals={2} />} note={`SD ${ms(s.rt.sd)} ms · ${s.excluded_outliers} outlier(s)`} />
+        <Kpi i={6} icon={<ShieldAlert size={14} />} label="False starts" value={s.false_start_rate == null ? "–" : <CountUp value={s.false_start_rate * 100} />} unit="%" note={`${s.counts.false_start + s.counts.anticipation} early / anticipatory`} />
       </div>
 
-      <Card className="span-8" title="Trial by trial" sub="Response time per trial, coloured by result (dashed ring = outlier)">
+      <Card className="span-8" i={7} icon={<BarChart3 size={18} />} iconTone="blue" title="Trial by trial" sub="Response time per trial, coloured by result (dashed ring = outlier)">
         <TrialStrip trials={a.trials} height={190} />
         <div className="legend mt-8">
           {Object.entries(s.counts).filter(([, n]) => n > 0).map(([k, n]) => <span key={k}><i style={{ background: RESULT_COLOUR[k] }} />{RESULT_LABEL[k]} {n}</span>)}
         </div>
       </Card>
-      <Card className="span-4" title="Coach insight" action={<span className="chip dark"><Lightbulb size={13} />Rule-based</span>}>
-        <div className="insight"><ul>{tips.map((t, i) => <li key={i}>{t}</li>)}</ul></div>
-        <p className="muted mt-12" style={{ fontSize: 12 }}>Training guidance from this block only. Results are not a diagnosis.</p>
+      <Card className="span-4 t-6" i={8} icon={<Lightbulb size={18} />} iconTone="lime" title="Coach insight" sub="Rule-based, from this block">
+        <div className="insight" style={{ flex: 1 }}><ul>{tips.map((t, i) => <li key={i} style={{ ["--i" as string]: i }}>{t}</li>)}</ul></div>
+        <p className="hint mt-12">Training guidance only. Results are not a diagnosis.</p>
       </Card>
 
-      <Card className="span-4" title="RT distribution" sub="Valid hits, 50 ms bins">
-        <Histogram bins={s.histogram} highlight={s.rt.median} height={180} />
+      <Card className="span-4 t-6" i={9} icon={<BarChart3 size={18} />} title="RT distribution" sub="Valid hits, 50 ms bins">
+        <div className="fill-center"><Histogram bins={s.histogram} highlight={s.rt.median} height={190} /></div>
         <div className="row between muted" style={{ fontSize: 12.5 }}><span>p10 {ms(s.rt.p10)} ms</span><span>median {ms(s.rt.median)} ms</span><span>p90 {ms(s.rt.p90)} ms</span></div>
       </Card>
-      <Card className="span-4" title="Target heatmap" sub="Median RT by target position">
-        <TargetArc targets={heat} height={210} />
+      <Card className="span-4 t-6" i={10} icon={<Crosshair size={18} />} iconTone="lime" title="Target heatmap" sub="Median RT by target position">
+        <div className="fill-center"><TargetArc targets={heat} height={220} /></div>
         <div className="row between" style={{ fontSize: 12.5 }}>
           <span className="row" style={{ gap: 6 }}><i style={{ width: 12, height: 12, borderRadius: 6, background: rtColour(lo, lo, hi + 1) }} />faster</span>
           <span className="row" style={{ gap: 6 }}>slower<i style={{ width: 12, height: 12, borderRadius: 6, background: rtColour(hi, lo, hi + 1) }} /></span>
         </div>
       </Card>
-      <Card className="span-4" title="Where the time goes" sub={a.imu_sensor ? `Wrist IMU: ${a.imu_sensor}` : "No IMU stream in this block"}>
+      <Card className="span-4 t-6" i={11} icon={<SplitSquareHorizontal size={18} />} iconTone="blue" title="Where the time goes" sub={a.imu_sensor ? `Wrist IMU: ${a.imu_sensor}` : "No IMU stream in this block"}>
         <SplitBar a={s.premotor.median} b={s.movement.median} />
-        <div className="mt-24">
-          <div className="row between" style={{ fontSize: 14 }}><span>Left side</span><b>{ms(s.by_side.left)} ms</b></div>
-          <div className="row between mt-8" style={{ fontSize: 14 }}><span>Right side</span><b>{ms(s.by_side.right)} ms</b></div>
-          <div className="row between mt-8" style={{ fontSize: 14 }}><span>Asymmetry</span>
-            <span className={`chip ${Math.abs(s.by_side.asymmetry_index_pct ?? 0) >= 6 ? "amber" : "green"}`}>{s.by_side.asymmetry_index_pct == null ? "–" : `${s.by_side.asymmetry_index_pct.toFixed(1)} %`}</span></div>
-          <div className="row between mt-16" style={{ fontSize: 14 }}><span>Central / mid / peripheral</span>
-            <b>{ms(s.by_band.central)} / {ms(s.by_band.mid)} / {ms(s.by_band.peripheral)}</b></div>
+        <div className="row between mt-24" style={{ fontSize: 13 }}>
+          <span className="muted">Left vs right</span>
+          <span className={`chip ${Math.abs(s.by_side.asymmetry_index_pct ?? 0) >= 6 ? "amber" : "green"}`}>{s.by_side.asymmetry_index_pct == null ? "–" : `${s.by_side.asymmetry_index_pct > 0 ? "+" : ""}${s.by_side.asymmetry_index_pct.toFixed(1)} % asymmetry`}</span>
         </div>
+        <CompareBars rows={[["Left", s.by_side.left], ["Right", s.by_side.right]]} />
+        <div className="muted mt-16" style={{ fontSize: 13 }}>By eccentricity</div>
+        <CompareBars rows={[["Central", s.by_band.central], ["Mid", s.by_band.mid], ["Peripheral", s.by_band.peripheral]]} />
       </Card>
 
-      <Card className="span-5" title="Balance during the block" sub="Centre-of-pressure path (mm)">
+      <Card className="span-5" i={12} icon={<Footprints size={18} />} iconTone="lime" title="Balance during the block" sub="Centre-of-pressure path (mm)">
         {a.balance?.status === "ok" ? (
           <div className="row" style={{ gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
             <CopPlot path={a.balance.path} size={210} half={Math.max(20, (a.balance.range_ml_mm ?? 20), (a.balance.range_ap_mm ?? 20)) * 0.8} />
@@ -165,10 +189,10 @@ function Detail({ runId, blockId, athleteName }: { runId: number | null; blockId
               ))}
             </div>
           </div>
-        ) : <Empty>{a.balance?.status === "no_load" ? "Nobody was standing on the board." : "No balance-board data for this block."}</Empty>}
+        ) : <Empty icon={<Footprints size={20} />}>{a.balance?.status === "no_load" ? "Nobody was standing on the board." : "No balance-board data for this block."}</Empty>}
       </Card>
-      <Card className="span-7" title="Trials" sub="Every trial is kept, including invalid ones">
-        <div className="scroll-x" style={{ maxHeight: 320, overflowY: "auto" }}>
+      <Card className="span-7" i={13} icon={<ListOrdered size={18} />} title="Trials" sub="Every trial is kept, including invalid ones">
+        <div className="scroll-x" style={{ maxHeight: 300, overflowY: "auto" }}>
           <table className="table">
             <thead><tr><th>#</th><th>Target</th><th>Cue</th><th>Result</th><th>RT</th><th>Decision</th><th>Movement</th><th>Pressed</th></tr></thead>
             <tbody>{a.trials.map((t) => (
@@ -186,5 +210,24 @@ function Detail({ runId, blockId, athleteName }: { runId: number | null; blockId
         </div>
       </Card>
     </>
+  );
+}
+
+/** Median RT per group as bars scaled to the slowest group (shorter = faster). */
+function CompareBars({ rows }: { rows: [string, number | null][] }) {
+  const vals = rows.map(([, v]) => v).filter((v): v is number => v != null);
+  const max = vals.length ? Math.max(...vals) : 1, min = vals.length ? Math.min(...vals) : 0;
+  return (
+    <div className="mt-8" style={{ display: "grid", gap: 8 }}>
+      {rows.map(([label, v], i) => (
+        <div key={label} style={{ display: "grid", gridTemplateColumns: "78px 1fr 58px", alignItems: "center", gap: 10, fontSize: 13 }}>
+          <span className="muted">{label}</span>
+          <div className="progress" style={{ height: 8 }}>
+            {v != null && <span style={{ width: `${(v / max) * 100}%`, background: v === min && vals.length > 1 ? "var(--lime)" : "var(--blue)", animationDelay: `${i * 80}ms` }} />}
+          </div>
+          <b style={{ fontWeight: 500, textAlign: "right" }}>{v != null ? `${v.toFixed(0)} ms` : "–"}</b>
+        </div>
+      ))}
+    </div>
   );
 }

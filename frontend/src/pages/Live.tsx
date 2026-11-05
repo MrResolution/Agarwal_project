@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { BarChart3, OctagonX, Play, ShieldAlert, Square } from "lucide-react";
+import {
+  Activity, Ban, BarChart3, BatteryMedium, Crosshair, Eye, Footprints, Hand, ListChecks, ListOrdered, OctagonX, Play,
+  ShieldAlert, Shuffle, Square, Target, Timer, UserRound, Wifi, Zap,
+} from "lucide-react";
 import { api, type Protocol, type Run } from "../api";
 import { CopPlot, Sparkline, TargetArc, type ArcTarget } from "../charts";
-import { copFromCorners, ms, RESULT_COLOUR, RESULT_LABEL, useAsync, useStationFeed, type FeedMessage } from "../lib";
-import { Card, Empty, Kpi, Progress, Skeleton, StatusChip, useToast } from "../ui";
+import { copFromCorners, RESULT_COLOUR, RESULT_LABEL, useAsync, useStationFeed, type FeedMessage } from "../lib";
+import { Card, CountUp, Empty, Kpi, Progress, Skeleton, StatusChip, useToast } from "../ui";
 
 const STATION = "station-1";
 const LAYOUT = Array.from({ length: 8 }, (_, i) => ({ id: `T${i + 1}`, angle: -70 + i * 20, row: i % 2 === 0 ? "upper" : "lower" }));
@@ -27,7 +30,7 @@ export default function Live() {
   const [lit, setLit] = useState<{ target: string; colour: string } | null>(null);
   const [flash, setFlash] = useState<{ target: string; result: string } | null>(null);
   const [trials, setTrials] = useState<LiveTrial[]>([]);
-  const [cop, setCop] = useState<{ x: number; y: number } | null>(null);
+  const [cop, setCop] = useState<{ x: number; y: number; w: number } | null>(null);
   const [copTrail, setCopTrail] = useState<[number, number][]>([]);
   const [imu, setImu] = useState<number[]>([]);
   const [hub, setHub] = useState<Record<string, any> | null>(null);
@@ -70,6 +73,8 @@ export default function Live() {
         open.current.set(key, t);
         setLit({ target: e.target_id, colour: e.colour ?? "green" });
         setTrials((ts) => [...ts.filter((x) => x.key !== key), t]);
+        // block_started can arrive before the start request returns; any trial event proves it's running.
+        setRun((r) => (r && r.status === "sent" && r.block_id === e.block_id ? { ...r, status: "running" } : r));
         break;
       }
       case "response": {
@@ -145,27 +150,30 @@ export default function Live() {
     };
   }), [lit, flash, trials]);
 
+  const blocker = !hub?.online ? "Hub offline" : !athlete ? "Choose an athlete" : !athlete.consent.data ? "Data consent missing" : null;
+
   return (
-    <>
+    <div className="has-estop">
       <div className="headline">
-        <div style={{ marginRight: "auto" }}>
+        <div className="title">
           <h1>Live session</h1>
-          <div className="sub row" style={{ gap: 8 }}>
+          <div className="sub">
             <span className={`pulse ${connected && hub?.online ? "" : "off"}`} />
-            {hub?.online ? `${STATION} · hub ${hub.device_id ?? ""} online` : "Hub offline. Check power and Wi-Fi."}
-            {hub?.battery_pct != null && <span className="chip">{Math.round(hub.battery_pct)}% battery</span>}
-            {hub?.rssi != null && <span className="chip">{Math.round(hub.rssi)} dBm</span>}
+            {hub?.online ? `${STATION} · ${hub.device_id ?? "hub"} online` : "Hub offline. Check power and Wi-Fi."}
+            {hub?.battery_pct != null && <span className="chip"><BatteryMedium size={13} />{Math.round(hub.battery_pct)}%</span>}
+            {hub?.rssi != null && <span className="chip"><Wifi size={13} />{Math.round(hub.rssi)} dBm</span>}
           </div>
         </div>
+        {blocker && !running && <span className="hint"><ShieldAlert size={14} />{blocker}</span>}
         {run && blockDone && <Link className="btn" to={`/analysis/run/${run.id}`}><BarChart3 size={16} />View analysis</Link>}
         {running
           ? <button className="btn dark" onClick={() => stop(false)}><Square size={15} />Stop block</button>
-          : <button className="btn primary" onClick={start} disabled={busy || !athlete || !athlete.consent.data || !hub?.online}><Play size={16} />Start {proto?.name ?? "block"}</button>}
+          : <button className="btn primary" onClick={start} disabled={busy || !!blocker} title={blocker ?? undefined}><Play size={16} />{busy ? "Starting…" : `Start ${proto?.name ?? "block"}`}</button>}
       </div>
 
       <div className="grid g-dash">
-        <div className="span-4 stack">
-          <Card title="Athlete">
+        <div className="span-4 stack t-row">
+          <Card title="Athlete" icon={<UserRound size={18} />} iconTone="blue" i={0} style={{ flex: "none" }}>
             {!athletes.data ? <Skeleton h={44} /> : !athletes.data.length ? <Empty>No athletes yet. <Link to="/athletes" style={{ color: "var(--blue)" }}>Add one</Link></Empty> : <>
               <select className="select" value={athleteId ?? ""} onChange={(e) => setAthleteId(Number(e.target.value))} disabled={!!running} aria-label="Athlete">
                 {athletes.data.map((a) => <option key={a.id} value={a.id}>{a.display_name || a.code} · {a.sport ?? a.group}</option>)}
@@ -178,14 +186,20 @@ export default function Live() {
               )}
             </>}
           </Card>
-          <Card title="Protocol" sub={proto ? `${proto.kind} · ${proto.n_trials} trials · window ${proto.window_ms} ms` : undefined}>
-            <div className="proto-grid">
-              {(protocols.data ?? []).map((p) => (
-                <button key={p.key} className={`proto ${p.key === protocol ? "on" : ""}`} onClick={() => setProtocol(p.key)} disabled={!!running}
-                  aria-label={`${p.name}: ${p.description}`} aria-pressed={p.key === protocol}>
-                  <b>{p.name}</b><span>{p.description}</span>
-                </button>
-              ))}
+          <Card title="Protocol" icon={<ListChecks size={18} />} i={1} sub={proto ? `${proto.kind} · ${nTrials ?? proto.n_trials} trials · window ${proto.window_ms} ms` : undefined}>
+            <div className="proto-list">
+              {!protocols.data && <Skeleton h={260} />}
+              {(protocols.data ?? []).map((p) => {
+                const Icon = PROTO_ICON[p.key] ?? Zap;
+                return (
+                  <button key={p.key} className={`proto ${p.key === protocol ? "on" : ""}`} onClick={() => setProtocol(p.key)} disabled={!!running}
+                    aria-label={`${p.name}: ${p.description}`} aria-pressed={p.key === protocol} title={p.description}>
+                    <span className="p-ico"><Icon size={18} /></span>
+                    <span className="grow"><b>{p.name}</b><span className="d">{p.description}</span></span>
+                    <span className={`chip ${p.kind === "assessment" ? "blue" : "lime"}`} style={{ height: 22, fontSize: 11.5 }}>{p.kind}</span>
+                  </button>
+                );
+              })}
             </div>
             <label className="field mt-16">Trials (blank = protocol default)
               <input className="input" type="number" min={1} max={64} placeholder={String(proto?.n_trials ?? "")} value={nTrials ?? ""}
@@ -195,11 +209,11 @@ export default function Live() {
         </div>
 
         <div className="span-8 stack">
-          <Card title="Targets" sub={run ? `${run.protocol_name} · ${run.block_id}` : "Target layout (lit target shown live)"}
-            action={run ? <StatusChip status={blockDone ?? run.status} /> : undefined}>
-            <TargetArc targets={arc} height={260} />
-            <div className="row between mt-8" style={{ fontSize: 13 }}>
-              <span className="muted">Trial {Math.min(scored.length + (lit ? 1 : 0), total || 0)} / {total || "–"}</span>
+          <Card title="Targets" icon={<Crosshair size={18} />} iconTone="lime" i={2} sub={run ? `${run.protocol_name} · ${run.block_id}` : "The lit target is shown live during a block"}
+            action={run ? <StatusChip status={blockDone ?? run.status} /> : <span className="chip">Idle</span>}>
+            <div className="fill-center"><TargetArc targets={arc} height={280} /></div>
+            <div className="row between mt-8 wrap" style={{ fontSize: 13 }}>
+              <span className="muted">{run ? `Trial ${Math.min(scored.length + (lit ? 1 : 0), total || 0)} of ${total}` : blocker ? blocker : `Ready: press Start to run ${proto?.name ?? "a block"}`}</span>
               <div className="legend">
                 {["hit", "wrong_target", "false_alarm", "false_start", "miss"].map((k) => <span key={k}><i style={{ background: RESULT_COLOUR[k] }} />{RESULT_LABEL[k]}</span>)}
               </div>
@@ -208,15 +222,15 @@ export default function Live() {
           </Card>
 
           <div className="kpis" style={{ gridTemplateColumns: "repeat(4, minmax(0,1fr))" }}>
-            <Kpi label="Last response" value={ms(lastRt)} unit="ms" />
-            <Kpi label="Median (hits)" value={ms(median)} unit="ms" />
-            <Kpi label="Accuracy" value={goTrials.length ? `${Math.round((hits.length / goTrials.length) * 100)}` : "–"} unit="%" />
-            <Kpi label="Errors" value={scored.filter((t) => !["hit", "correct_rejection"].includes(t.result!)).length} note="wrong, miss, no-go, early" />
+            <Kpi i={3} icon={<Timer size={14} />} label="Last response" value={lastRt == null ? "–" : <CountUp value={lastRt} duration={350} />} unit="ms" />
+            <Kpi i={4} icon={<Activity size={14} />} label="Median (hits)" value={median == null ? "–" : <CountUp value={median} duration={350} />} unit="ms" />
+            <Kpi i={5} icon={<Target size={14} />} label="Accuracy" value={goTrials.length ? <CountUp value={(hits.length / goTrials.length) * 100} duration={350} /> : "–"} unit="%" />
+            <Kpi i={6} icon={<ShieldAlert size={14} />} label="Errors" value={scored.filter((t) => !["hit", "correct_rejection"].includes(t.result!)).length} note="wrong, miss, no-go, early" />
           </div>
         </div>
 
-        <Card className="span-4" title="Response feed" sub="Newest first">
-          {trials.length ? [...trials].reverse().slice(0, 9).map((t) => (
+        <Card className="span-4" i={7} icon={<ListOrdered size={18} />} title="Response feed" sub="Newest first">
+          {trials.length ? [...trials].reverse().slice(0, 8).map((t) => (
             <div key={t.key} className="feed-row">
               <span className="chip" style={{ justifyContent: "center", padding: 0 }}>{t.target}</span>
               <span style={{ color: t.result ? RESULT_COLOUR[t.result] === "#cff25c" ? "#5a7000" : RESULT_COLOUR[t.result] : "var(--muted)" }}>
@@ -224,24 +238,29 @@ export default function Live() {
               </span>
               <b>{t.rt != null ? `${t.rt.toFixed(0)} ms` : ""}</b>
             </div>
-          )) : <Empty>Responses appear here as the athlete hits targets.</Empty>}
+          )) : <Empty icon={<ListOrdered size={20} />}>Responses appear here as the athlete hits targets.</Empty>}
         </Card>
 
-        <Card className="span-4" title="Balance" sub="Live centre of pressure (mm)">
-          <div style={{ display: "grid", placeItems: "center" }}><CopPlot path={copTrail} live={cop} size={230} /></div>
+        <Card className="span-4 t-6" i={8} icon={<Footprints size={18} />} iconTone="lime" title="Balance" sub="Live centre of pressure (mm)"
+          action={<span className={`chip ${cop ? "green" : ""}`}>{cop ? `${cop.w.toFixed(0)} kg` : "no load"}</span>}>
+          <div style={{ display: "grid", placeItems: "center", flex: 1 }}><CopPlot path={copTrail} live={cop} size={230} /></div>
           <div className="row between mt-8" style={{ fontSize: 13 }}>
-            <span className="muted">ML {cop ? cop.x.toFixed(1) : "–"} · AP {cop ? cop.y.toFixed(1) : "–"}</span>
-            <span className="muted">{copTrail.length ? "board loaded" : "no load"}</span>
+            <span className="muted">Medio-lateral <b style={{ color: "var(--ink)", fontWeight: 500 }}>{cop ? cop.x.toFixed(1) : "–"}</b></span>
+            <span className="muted">Antero-posterior <b style={{ color: "var(--ink)", fontWeight: 500 }}>{cop ? cop.y.toFixed(1) : "–"}</b></span>
           </div>
         </Card>
 
-        <Card className="span-4" title="Wrist motion" sub="|acceleration − g| (m/s²), throttled live view">
-          <Sparkline values={imu.length > 1 ? imu : [0, 0]} height={150} colour="#1f5eff" />
-          <p className="muted mt-12" style={{ fontSize: 13 }}>Bursts mark movement onset. Analysis splits each response into decision and movement time from the full-rate stream.</p>
+        <Card className="span-4 t-6" i={9} icon={<Hand size={18} />} iconTone="blue" title="Wrist motion" sub="|acceleration − g| in m/s², live view">
+          <div style={{ flex: 1, display: "flex", alignItems: "center" }}><div style={{ width: "100%" }}>
+            <Sparkline values={imu.length > 1 ? imu : [0, 0]} height={170} colour="#1f5eff" />
+          </div></div>
+          <p className="hint mt-12">Bursts mark movement onset. Analysis splits each response into decision and movement time from the full-rate stream.</p>
         </Card>
       </div>
 
-      <button className="estop" onClick={() => stop(true)} aria-label="Emergency stop"><OctagonX size={20} />E-STOP</button>
-    </>
+      <button className="estop" onClick={() => stop(true)} aria-label="Emergency stop: turn off all targets"><OctagonX size={20} />E-STOP</button>
+    </div>
   );
 }
+
+const PROTO_ICON: Record<string, typeof Zap> = { simple_rt: Zap, choice_rt: Shuffle, go_nogo: Ban, peripheral: Eye, speed_drill: Timer };

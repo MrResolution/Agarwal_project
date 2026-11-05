@@ -11,6 +11,10 @@ export interface Athlete {
   visual_correction: string | null; history_notes: string | null; goals: string | null;
   is_minor: boolean; anonymised_at: string | null; created_at: string; consent: Consent;
 }
+export interface AthleteStats {
+  runs: number; completed: number; this_week: number; last_run_at: string | null; trend: number[];
+  latest: { protocol: string; median_rt: number | null; accuracy: number | null; run_id: number } | null;
+}
 export interface ConsentRecord {
   id: number; type: "data" | "video" | "research"; text_version: string; signed_by: string;
   guardian_name: string | null; signed_at: string; withdrawn_at: string | null; active: boolean;
@@ -66,6 +70,7 @@ export interface Overview {
   protocol_mix: Record<string, number>; devices_online: number; devices_total: number; open_alerts: number;
   recent_runs: Run[]; leaderboard: { athlete_id: number; code: string; name: string | null; sport: string | null; protocol: string; median_rt: number | null; accuracy: number | null }[];
   athletes_without_consent: number;
+  leaderboards: Record<string, { athlete_id: number; code: string; name: string | null; sport: string | null; protocol: string; run_id: number; median_rt: number; accuracy: number | null; at: string }[]>;
 }
 export interface Device { id: string; station: string; kind: string; firmware: string | null; boot_id: string | null; online: boolean; battery_pct: number | null; rssi: number | null; last_seen: string | null; last_status: Record<string, any> }
 export interface Alert { id: number; at: string; station: string; device_id: string | null; kind: string; severity: string; message: string; detail: Record<string, any>; resolved_at: string | null }
@@ -118,6 +123,7 @@ export const api = {
   overview: () => request<Overview>("GET", `/overview?days=42&tz_offset_min=${new Date().getTimezoneOffset()}`),
   athletes: (q = "") => request<Athlete[]>("GET", `/athletes${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   athlete: (id: number) => request<Athlete>("GET", `/athletes/${id}`),
+  athleteStats: () => request<Record<number, AthleteStats>>("GET", "/athletes-stats"),
   createAthlete: (body: Partial<Athlete>) => request<Athlete>("POST", "/athletes", body),
   updateAthlete: (id: number, body: Partial<Athlete>) => request<Athlete>("PATCH", `/athletes/${id}`, body),
   consents: (id: number) => request<ConsentRecord[]>("GET", `/athletes/${id}/consents`),

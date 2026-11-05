@@ -86,6 +86,13 @@ def test_run_lifecycle_and_analysis(tmp_path, broker_thread):  # noqa: F811
             ov = client.get("/overview", headers=h).json()
             assert ov["athletes"] == 1 and ov["runs_total"] == 1 and ov["devices_online"] == 1
             assert ov["recent_runs"][0]["athlete_code"] == ath["code"]
+            board = ov["leaderboards"]["choice_rt"]
+            assert board[0]["athlete_id"] == ath["id"] and board[0]["run_id"] == run["id"]
+            assert "go_nogo" not in ov["leaderboards"], "rankings never mix protocols"
+
+            stats = client.get("/athletes-stats", headers=h).json()[str(ath["id"])]
+            assert stats["runs"] == 1 and stats["completed"] == 1 and stats["this_week"] == 1
+            assert stats["latest"]["run_id"] == run["id"] and stats["latest"]["median_rt"] == s["rt"]["median"]
 
             # Stop a running block
             run2 = client.post(f"/athletes/{ath['id']}/runs", headers=h,
