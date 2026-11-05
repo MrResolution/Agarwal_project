@@ -319,15 +319,17 @@ export interface ArcTarget { id: string; angle: number; row: string; fill?: stri
 export function TargetArc({ targets, height = 220, athlete = true }: { targets: ArcTarget[]; height?: number; athlete?: boolean }) {
   const [ref, w] = useWidth<HTMLDivElement>();
   // One ring of targets around the athlete; sub-labels sit radially outside each target.
-  const cx = w / 2, cy = height - 30;
   const labelRoom = targets.some((t) => t.sub) ? 26 : 8;
   const R = Math.max(60, Math.min(w / 2 - 30 - labelRoom, height - 54 - labelRoom));
+  // When width limits the arc (phones), shrink the drawing height too so there's no blank band on top.
+  const h = Math.min(height, Math.ceil(R + 54 + labelRoom + 8));
+  const cx = w / 2, cy = h - 30;
   const span = targets.length > 1 ? Math.abs(targets[targets.length - 1]!.angle - targets[0]!.angle) / (targets.length - 1) : 40;
   const chord = 2 * R * Math.sin(((span || 20) * Math.PI) / 360);
   const rad = Math.max(13, Math.min(22, chord * 0.4));
   return (
     <div ref={ref}>
-      <svg width={w} height={height}>
+      <svg width={w} height={h}>
         {(() => {
           const angles = targets.map((t) => t.angle);
           const a0 = ((Math.min(...angles, 0) - 12 - 90) * Math.PI) / 180, a1 = ((Math.max(...angles, 0) + 12 - 90) * Math.PI) / 180;

@@ -442,6 +442,9 @@ svg text { font-family: var(--font); }
   .brand .name { display: none; }
   .card { padding: 18px; }
   .card-head { flex-wrap: wrap; }
+  /* Title keeps a fixed share of the row so a lone arrow link stays beside it; wide actions wrap below. */
+  .card-head .ttl { flex: 1 1 120px; }
+  .card-head .spacer { display: none; }
   .card-head .hide-sm { display: none; }
   .g-dash > .t-6 { grid-column: span 12; }
   .stack.t-row { flex-direction: column; }
