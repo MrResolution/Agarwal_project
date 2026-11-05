@@ -19,7 +19,8 @@ PASSWORD = "correct-horse-battery"
 def migrated_settings(tmp_path: Path, **overrides) -> Settings:
     """Settings pointing at a fresh SQLite DB built by the real Alembic migrations."""
     params = {"jwt_secret": "test-secret-at-least-32-bytes-long!!", "run_gateway": False, **overrides}
-    settings = Settings(data_dir=tmp_path, **params)
+    # _env_file=None: ignore the developer's backend/.env (e.g. SVS_OPEN_ACCESS=true) so tests are hermetic.
+    settings = Settings(_env_file=None, data_dir=tmp_path, **params)
     cfg = alembic_config(settings.resolved_database_url())
     cfg.attributes["configure_logger"] = False
     command.upgrade(cfg, "head")

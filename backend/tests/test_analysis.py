@@ -99,9 +99,14 @@ def test_plans_are_seeded_balanced_and_valid():
     assert all(p.foreperiod_ms[0] <= t.foreperiod_ms <= p.foreperiod_ms[1] for t in a)
     simple = generate_plan(PROTOCOLS["simple_rt"], seed=1)
     assert len({t.target_id for t in simple}) == 1
+    assert {t.target_id for t in simple} == {"T3"}, "6-target arc: T3 (-14 deg) is the centre target"
     periph = generate_plan(PROTOCOLS["peripheral"], seed=1)
-    layout = default_layout(8)
-    assert all(layout[t.target_id].band == "peripheral" for t in periph)
+    layout = default_layout()
+    assert len(layout) == 6 and [p.angle_deg for p in layout.values()] == [-70, -42, -14, 14, 42, 70]
+    assert {t.target_id for t in periph} == {"T1", "T2", "T5", "T6"}, "outer targets only"
+    assert all(layout[t.target_id].band != "central" for t in periph)
+    eight = generate_plan(PROTOCOLS["choice_rt"], seed=1, n_targets=8)
+    assert {t.target_id for t in eight} == {f"T{i}" for i in range(1, 9)}, "a larger station still works"
     assert protocol_with_overrides("choice_rt", {"n_trials": 6, "foreperiod_ms": [100, 200]}).n_trials == 6
     with pytest.raises(KeyError):
         protocol_with_overrides("nope", None)

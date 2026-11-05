@@ -148,7 +148,8 @@ All admin only.
 ```
 
 - `protocol`: `simple_rt` · `choice_rt` · `go_nogo` · `peripheral` · `speed_drill`
-- `params` (optional overrides): `n_trials`, `foreperiod_ms` (`[lo, hi]`), `window_ms`, `iti_ms`, `nogo_ratio`, `targets` (`all` · `centre` · `peripheral`)
+- `params` (optional overrides): `n_trials`, `foreperiod_ms` (`[lo, hi]`), `window_ms`, `iti_ms`, `nogo_ratio`, `targets` (`all` · `centre` = the single most central target · `peripheral` = every target outside the central band)
+- **Targets:** the plan uses the hub's own target list from its status heartbeat (6 touch-sensor targets, `T1`–`T6`, on the standard station)
 - `seed` (optional): give the same seed and parameters to repeat the exact trial sequence
 
 **What happens on start:**

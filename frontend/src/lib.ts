@@ -37,13 +37,23 @@ export function initials(name: string | null | undefined, fallback = "?") {
 export const athleteLabel = (a: { display_name?: string | null; name?: string | null; code?: string | null }) =>
   a.display_name || a.name || a.code || "Athlete";
 
+// ---------------------------------------------------------------- target layout
+/** The station has 6 touch-sensor targets; a hub reports its own count in its status heartbeat. */
+export const DEFAULT_TARGETS = 6;
+/** Default arc (matches backend analysis/layout.py): n targets from -70° to +70°, alternating rows. */
+export function arcLayout(n: number = DEFAULT_TARGETS) {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `T${i + 1}`, angle: n > 1 ? -70 + (140 / (n - 1)) * i : 0, row: i % 2 === 0 ? "upper" : "lower",
+  }));
+}
+
 // ---------------------------------------------------------------- colours
 export const RESULT_COLOUR: Record<string, string> = {
   hit: "#1f5eff", wrong_target: "#ffb020", miss: "#c5c8d0", false_alarm: "#ff3b30",
   correct_rejection: "#cff25c", false_start: "#ff7a45", anticipation: "#ff7a45", invalid: "#e1e2e7",
 };
 export const RESULT_LABEL: Record<string, string> = {
-  hit: "Hit", wrong_target: "Wrong target", miss: "Miss", false_alarm: "No-go press", correct_rejection: "Correct no-go",
+  hit: "Hit", wrong_target: "Wrong target", miss: "Miss", false_alarm: "No-go touch", correct_rejection: "Correct no-go",
   false_start: "False start", anticipation: "Anticipation", invalid: "Invalid",
 };
 /** RT -> colour from lime (fast) through blue to red (slow), relative to a range. */
@@ -89,7 +99,7 @@ export function insights(a: Analysis | null): string[] {
   const c = s.by_band.central, p = s.by_band.peripheral;
   if (c && p && p - c > 40) out.push(`Peripheral targets cost ${(p - c).toFixed(0)} ms more than central ones. The peripheral-response protocol trains this.`);
   if ((s.false_start_rate ?? 0) >= 0.1) out.push(`${pct(s.false_start_rate)} of trials started early. Lengthen and vary the foreperiod to discourage anticipation.`);
-  if ((s.commission_rate ?? 0) >= 0.25) out.push(`Pressed on ${pct(s.commission_rate)} of no-go cues. Response inhibition is the limiting factor; slow down and prioritise accuracy.`);
+  if ((s.commission_rate ?? 0) >= 0.25) out.push(`Touched on ${pct(s.commission_rate)} of no-go cues. Response inhibition is the limiting factor; slow down and prioritise accuracy.`);
   if ((s.rt.cv ?? 0) >= 0.2) out.push(`Reaction times vary a lot (CV ${num(s.rt.cv)}). Consistency work before speed work.`);
   if (s.premotor.median && s.movement.median) {
     const share = s.premotor.median / (s.premotor.median + s.movement.median);
@@ -135,12 +145,13 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], pollMs = 0) {
 }
 
 export interface FeedMessage { type: string; [k: string]: any }
-/** Live station feed over WebSocket with automatic reconnect. */
-export function useStationFeed(station: string, onMessage: (m: FeedMessage) => void) {
+/** Live station feed over WebSocket with automatic reconnect. `enabled=false` keeps it closed. */
+export function useStationFeed(station: string, onMessage: (m: FeedMessage) => void, enabled = true) {
   const [connected, setConnected] = useState(false);
   const cb = useRef(onMessage);
   cb.current = onMessage;
   useEffect(() => {
+    if (!enabled) { setConnected(false); return; }
     let ws: WebSocket | null = null;
     let closed = false;
     let retry: ReturnType<typeof setTimeout>;
@@ -152,6 +163,6 @@ export function useStationFeed(station: string, onMessage: (m: FeedMessage) => v
     };
     open();
     return () => { closed = true; clearTimeout(retry); ws?.close(); };
-  }, [station]);
+  }, [station, enabled]);
   return connected;
 }

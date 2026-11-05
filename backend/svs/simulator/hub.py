@@ -56,7 +56,7 @@ class SimConfig:
     station: str = "station-1"
     device_id: str = "hub-01"
     firmware: str = "sim-0.1.0"
-    n_targets: int = 8
+    n_targets: int = 6  # touch-sensor targets on the station
     imu_sensors: list[str] = field(default_factory=lambda: ["wrist_r"])
     balance_sensors: list[str] = field(default_factory=lambda: ["board"])
     imu_hz: float = 100.0

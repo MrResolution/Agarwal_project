@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--port", type=int, default=1883)
     p.add_argument("--station", default="station-1")
     p.add_argument("--device", default="hub-01")
-    p.add_argument("--targets", type=int, default=8)
+    p.add_argument("--targets", type=int, default=6, help="number of touch-sensor targets")
     p.add_argument("--seed", type=int)
     p.add_argument("--drop", type=float, default=0.0, help="probability of losing a sequenced message")
     p.add_argument("--dup", type=float, default=0.0, help="probability of duplicating a sequenced message")

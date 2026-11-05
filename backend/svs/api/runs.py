@@ -14,6 +14,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from .. import audit
+from ..analysis.layout import DEFAULT_N_TARGETS
 from ..analysis.protocols import PROTOCOLS, generate_plan, protocol_with_overrides
 from ..analysis.service import analyse_block, block_events, block_status
 from ..deps import current_user, get_db, get_visible_athlete, require_staff, visible_athletes
@@ -143,7 +144,7 @@ async def start_run(athlete_id: int, body: RunCreate, request: Request, db: Sess
     dev = next((d for d in gw.devices.values() if d.station == body.station and d.online), None)
     if dev is None:
         raise HTTPException(status.HTTP_409_CONFLICT, f"No online hub on {body.station}")
-    n_targets = len(dev.status.get("targets") or []) or 8
+    n_targets = len(dev.status.get("targets") or []) or DEFAULT_N_TARGETS
     seed = body.seed if body.seed is not None else random.randrange(1, 2**31)
     plan = generate_plan(proto, seed, n_targets)
     run = BlockRun(

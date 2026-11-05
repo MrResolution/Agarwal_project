@@ -5,9 +5,9 @@ Start with the **Project overview**, then follow the path for your role.
 | Document | What it covers | Read it if you… |
 |---|---|---|
 | [Project overview](project-overview.md) | What VisionReflex is, the physical setup, key ideas, vocabulary, one run end to end, repository map, current status | are new to the project |
-| [Dashboard guide](dashboard-guide.md) | Every page and card of the coach dashboard, with screenshots, and a five-step typical session | coach, train or assess athletes |
-| [Metrics reference](metrics-reference.md) | Protocols, trial classification, RT statistics, d′, decision/movement split, balance, skill radar, coach insights, baselines | want to know exactly what a number means |
-| [Setup and operations](setup-and-operations.md) | Install, run, simulator options, real hardware, open access, settings, data and backups, alerts, troubleshooting | install or look after the system |
+| [Dashboard guide](dashboard-guide.md) | Every page and card of the coach dashboard, including body tracking with the camera, with screenshots, and a five-step typical session | coach, train or assess athletes |
+| [Metrics reference](metrics-reference.md) | Protocols, the 6-target layout, trial classification, RT statistics, d′, decision/movement split, balance, body-tracking metrics, skill radar, coach insights, baselines | want to know exactly what a number means |
+| [Setup and operations](setup-and-operations.md) | Install, run, simulator options, real hardware (touch sensors), body tracking and the camera, open access, settings, data and backups, alerts, troubleshooting | install or look after the system |
 | [Architecture](architecture.md) | Components, backend modules, data model, run lifecycle, device gateway, frontend, security, tests | develop the backend or frontend |
 | [API reference](api-reference.md) | Authentication, roles, every REST endpoint, request bodies, the live WebSocket feed | integrate with or script against the API |
 | [Hub MQTT data scheme](hub-mqtt-data-scheme.md) | Topics, message formats, clock sync, commands and broker discovery the ESP32-S3 firmware must implement | write or test hub firmware |
@@ -35,7 +35,7 @@ Start with the **Project overview**, then follow the path for your role.
 
 ## Screenshots
 
-All 15 screenshots are in [`screenshots/`](screenshots/). They were captured from the running system with the simulated hub, and are used in the [Dashboard guide](dashboard-guide.md) and the [root README](../README.md).
+All 18 screenshots are in [`screenshots/`](screenshots/). They were captured from the running system with the simulated hub and, for body tracking, the simulated athlete, and are used in the [Dashboard guide](dashboard-guide.md) and the [root README](../README.md).
 
 ## Diagrams
 

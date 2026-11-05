@@ -139,7 +139,7 @@ function Detail({ runId, blockId, athleteName }: { runId: number | null; blockId
       <div className="span-12 kpis">
         <Kpi i={2} icon={<Timer size={14} />} label="Median reaction" value={<CountUp value={s.rt.median} />} unit="ms" note={`mean ${ms(s.rt.mean)} · IQR ${ms(s.rt.iqr)}`} />
         <Kpi i={3} icon={<Target size={14} />} label="Accuracy" value={s.accuracy == null ? "–" : <CountUp value={s.accuracy * 100} />} unit="%" note={`${s.counts.hit}/${s.go_trials} go trials hit`} />
-        <Kpi i={4} icon={<Sigma size={14} />} label="Sensitivity d′" value={s.dprime == null ? "–" : <CountUp value={s.dprime} decimals={2} />} note={s.nogo_trials ? `${s.counts.false_alarm}/${s.nogo_trials} no-go presses` : "no no-go trials"} />
+        <Kpi i={4} icon={<Sigma size={14} />} label="Sensitivity d′" value={s.dprime == null ? "–" : <CountUp value={s.dprime} decimals={2} />} note={s.nogo_trials ? `${s.counts.false_alarm}/${s.nogo_trials} no-go touches` : "no no-go trials"} />
         <Kpi i={5} icon={<Activity size={14} />} label="Consistency (CV)" value={s.rt.cv == null ? "–" : <CountUp value={s.rt.cv} decimals={2} />} note={`SD ${ms(s.rt.sd)} ms · ${s.excluded_outliers} outlier(s)`} />
         <Kpi i={6} icon={<ShieldAlert size={14} />} label="False starts" value={s.false_start_rate == null ? "–" : <CountUp value={s.false_start_rate * 100} />} unit="%" note={`${s.counts.false_start + s.counts.anticipation} early / anticipatory`} />
       </div>
@@ -194,7 +194,7 @@ function Detail({ runId, blockId, athleteName }: { runId: number | null; blockId
       <Card className="span-7" i={13} icon={<ListOrdered size={18} />} title="Trials" sub="Every trial is kept, including invalid ones">
         <div className="scroll-x" style={{ maxHeight: 300, overflowY: "auto" }}>
           <table className="table">
-            <thead><tr><th>#</th><th>Target</th><th>Cue</th><th>Result</th><th>RT</th><th>Decision</th><th>Movement</th><th>Pressed</th></tr></thead>
+            <thead><tr><th>#</th><th>Target</th><th>Cue</th><th>Result</th><th>RT</th><th>Decision</th><th>Movement</th><th>Touched</th></tr></thead>
             <tbody>{a.trials.map((t) => (
               <tr key={t.trial_no}>
                 <td>{t.trial_no + 1}</td><td>{t.target_id}</td>

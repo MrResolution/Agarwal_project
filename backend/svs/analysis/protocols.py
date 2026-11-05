@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from ..contract.messages import TrialSpec
-from .layout import default_layout
+from .layout import DEFAULT_N_TARGETS, default_layout
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class Protocol:
     window_ms: int = 1500
     iti_ms: int = 600
     nogo_ratio: float = 0.0
-    targets: str = "all"  # "all" | "centre" | "peripheral"
+    targets: str = "all"  # "all" | "centre" | "peripheral" (every target outside the central band)
     skills: tuple[str, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, Any]:
@@ -76,11 +76,13 @@ def eligible_targets(p: Protocol, n_targets: int) -> list[str]:
         centre = min(layout.values(), key=lambda t: abs(t.angle_deg))
         return [centre.target_id]
     if p.targets == "peripheral":
-        return [t.target_id for t in layout.values() if t.band == "peripheral"] or list(layout)
+        # Outer targets: everything outside the central band (mid + peripheral). With 6 targets
+        # the >= 45 deg band alone would leave only T1 and T6.
+        return [t.target_id for t in layout.values() if t.band != "central"] or list(layout)
     return list(layout)
 
 
-def generate_plan(p: Protocol, seed: int, n_targets: int = 8) -> list[TrialSpec]:
+def generate_plan(p: Protocol, seed: int, n_targets: int = DEFAULT_N_TARGETS) -> list[TrialSpec]:
     """Balanced, seeded sequence: each eligible target appears equally often (as far as the
     trial count allows) and never more than 3 times in a row; no-go trials are spread evenly."""
     rng = random.Random(seed)

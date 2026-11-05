@@ -83,7 +83,7 @@ def alerts(sm, kind: str | None = None) -> list[DeviceAlert]:
 
 
 def block(n: int, block_id: str = "b1", **kw) -> dict:
-    trials = [TrialSpec(trial_no=i, target_id=f"T{(i % 8) + 1}", foreperiod_ms=120 + 20 * (i % 3),
+    trials = [TrialSpec(trial_no=i, target_id=f"T{(i % 6) + 1}", foreperiod_ms=120 + 20 * (i % 3),
                         window_ms=900, iti_ms=30, **kw) for i in range(n)]
     return StartBlockArgs(block_id=block_id, trials=trials).model_dump()
 

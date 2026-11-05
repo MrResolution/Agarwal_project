@@ -1,26 +1,28 @@
 # Metrics reference
 
-How every number on the dashboard is calculated. The scoring lives in `backend/svs/analysis/`. The skill radar and coach insights are display rules in `frontend/src/lib.ts`. Everything below is taken from that code.
+How every number on the dashboard is calculated. The scoring lives in `backend/svs/analysis/`. The skill radar and coach insights are display rules in `frontend/src/lib.ts`, and body tracking is computed in the browser by `frontend/src/pose/`. Everything below is taken from that code.
 
-**Contents:** [Protocols](#protocols) · [Target layout](#target-layout) · [Trial classification](#trial-classification) · [Reaction-time statistics](#reaction-time-statistics) · [Accuracy and error rates](#accuracy-and-error-rates) · [Sensitivity d′](#sensitivity-d) · [Side and band comparisons](#side-and-band-comparisons) · [Decision and movement time](#decision-and-movement-time) · [Balance](#balance) · [Skill radar](#skill-radar) · [Coach insights](#coach-insights) · [Baselines and trends](#baselines-and-trends) · [Dashboard aggregates](#dashboard-aggregates)
+**Contents:** [Protocols](#protocols) · [Target layout](#target-layout) · [Trial classification](#trial-classification) · [Reaction-time statistics](#reaction-time-statistics) · [Accuracy and error rates](#accuracy-and-error-rates) · [Sensitivity d′](#sensitivity-d) · [Side and band comparisons](#side-and-band-comparisons) · [Decision and movement time](#decision-and-movement-time) · [Balance](#balance) · [Body tracking](#body-tracking) · [Skill radar](#skill-radar) · [Coach insights](#coach-insights) · [Baselines and trends](#baselines-and-trends) · [Dashboard aggregates](#dashboard-aggregates)
 
 ---
 
 ## Protocols
 
+The station has **6 touch-sensor targets** (T1–T6). Trial counts and target choices below are for that station.
+
 | Key | Name | Kind | Trials | Foreperiod | Window | ITI | No-go | Targets |
 |---|---|---|---|---|---|---|---|---|
-| `simple_rt` | Simple reaction | assessment | 20 | 1000–2500 ms | 1500 ms | 600 ms | 0 % | Centre only (T4) |
-| `choice_rt` | Choice reaction | assessment | 24 | 1000–2500 ms | 1500 ms | 600 ms | 0 % | All 8 |
-| `go_nogo` | Go / No-Go | assessment | 30 | 1000–2500 ms | 1500 ms | 600 ms | 25 % (8 trials) | All 8 |
-| `peripheral` | Peripheral response | training | 24 | 1000–2500 ms | 1500 ms | 600 ms | 0 % | Peripheral band (T1, T2, T7, T8) |
-| `speed_drill` | Speed drill | training | 30 | 600–1400 ms | 900 ms | 400 ms | 0 % | All 8 |
+| `simple_rt` | Simple reaction | assessment | 20 | 1000–2500 ms | 1500 ms | 600 ms | 0 % | Centre only (T3) |
+| `choice_rt` | Choice reaction | assessment | 24 | 1000–2500 ms | 1500 ms | 600 ms | 0 % | All 6 (4 trials each) |
+| `go_nogo` | Go / No-Go | assessment | 30 | 1000–2500 ms | 1500 ms | 600 ms | 25 % (8 trials) | All 6 (5 trials each) |
+| `peripheral` | Peripheral response | training | 24 | 1000–2500 ms | 1500 ms | 600 ms | 0 % | Outer targets: T1, T2, T5, T6 (6 trials each) |
+| `speed_drill` | Speed drill | training | 30 | 600–1400 ms | 900 ms | 400 ms | 0 % | All 6 (5 trials each) |
 
 - **Foreperiod:** a random wait before the LED comes on, drawn uniformly from the range for every trial.
 - **Window:** how long the athlete has to respond once the LED is on.
 - **ITI:** the inter-trial interval, the pause after the LED goes off.
 - **Overrides:** a run can override `n_trials`, `foreperiod_ms`, `window_ms`, `iti_ms`, `nogo_ratio` and `targets`. Other keys are ignored. The dashboard only exposes the trial count (1–64).
-- **Peripheral** is peripheral-response *training*: it is not a fixation-controlled visual-field test.
+- **Peripheral** is peripheral-response *training*: it is not a fixation-controlled visual-field test. It uses every target **outside the central band** (`targets: "peripheral"`), because on a 6-target arc the ≥ 45° band alone would leave only T1 and T6.
 
 ### How a trial plan is generated
 
@@ -35,17 +37,19 @@ A plan is fully determined by **(protocol, parameters, seed)**, so any block can
 
 ## Target layout
 
-Until per-device calibration exists, targets sit on a horizontal arc from −70° (left) to +70° (right), alternating upper and lower rows. With 8 targets:
+Each target is an LED ring with a **touch sensor**. Until per-device calibration exists, targets sit evenly on a horizontal arc from −70° (left) to +70° (right), alternating upper and lower rows. With the station's 6 targets:
 
-| Target | T1 | T2 | T3 | T4 | T5 | T6 | T7 | T8 |
-|---|---|---|---|---|---|---|---|---|
-| Angle | −70° | −50° | −30° | −10° | +10° | +30° | +50° | +70° |
-| Side | left | left | left | left | right | right | right | right |
-| Band | peripheral | peripheral | mid | central | central | mid | peripheral | peripheral |
-| Row | upper | lower | upper | lower | upper | lower | upper | lower |
+| Target | T1 | T2 | T3 | T4 | T5 | T6 |
+|---|---|---|---|---|---|---|
+| Angle | −70° | −42° | −14° | +14° | +42° | +70° |
+| Side | left | left | left | right | right | right |
+| Band | peripheral | mid | central | central | mid | peripheral |
+| Row | upper | lower | upper | lower | upper | lower |
 
-- **Side:** *centre* for targets less than 10° from straight ahead (none in the 8-target layout), otherwise left or right.
+- **Side:** *centre* for targets less than 10° from straight ahead (none on the 6-target arc), otherwise left or right.
 - **Band** (eccentricity): central < 20°, mid 20–45°, peripheral ≥ 45°.
+- **Target count:** the hub reports its targets in every status heartbeat. Plans and the analysis layout use that count, so a hub with a different number of targets still works.
+- **Older blocks:** blocks recorded on a larger station keep their own layout. The analysis uses the highest target number seen in the block if it's more than the hub reports.
 
 ---
 
@@ -55,11 +59,11 @@ Each trial that reached the hub is given exactly one result. The rules are check
 
 | # | Condition | Result | Dashboard label | Colour |
 |---|---|---|---|---|
-| 1 | A `false_start` event during the foreperiod | `false_start` | False start | orange |
+| 1 | A `false_start` event (a touch during the foreperiod) | `false_start` | False start | orange |
 | 2 | Response with RT < **100 ms** | `anticipation` | Anticipation | orange |
-| 3 | Response on a no-go (red) trial | `false_alarm` | No-go press | red |
-| 4 | Response on a different target | `wrong_target` | Wrong target | amber |
-| 5 | Response on the lit target | `hit` | Hit | blue |
+| 3 | Touch on a no-go (red) trial | `false_alarm` | No-go touch | red |
+| 4 | Touch on a different target | `wrong_target` | Wrong target | amber |
+| 5 | Touch on the lit target | `hit` | Hit | blue |
 | 6 | No response on a no-go trial, trial completed | `correct_rejection` | Correct no-go | lime |
 | 7 | No response on a go trial, trial completed | `miss` | Miss | grey |
 | 8 | Trial never completed (block stopped mid-trial) | `invalid` | Invalid | light grey |
@@ -100,7 +104,7 @@ Computed from **valid hits** only (hits, outliers excluded).
 | **Accuracy** | hits / go trials | KPI tile, lists, trends |
 | Overall accuracy | (hits + correct rejections) / scored trials | API only |
 | Omission rate | misses / go trials | API only |
-| Commission rate | no-go presses / no-go trials | Coach insight |
+| Commission rate | no-go touches / no-go trials | Coach insight |
 | **False-start rate** | (false starts + anticipations) / scored trials | KPI tile (as a count), Control axis |
 
 Wrong-target responses count against accuracy (they are go trials without a hit).
@@ -109,16 +113,16 @@ Wrong-target responses count against accuracy (they are go trials without a hit)
 
 ## Sensitivity d′
 
-Only for blocks with no-go trials (Go / No-Go, or a custom `nogo_ratio`). It measures how well the athlete separates *go* from *no-go*, independent of how willing they are to press.
+Only for blocks with no-go trials (Go / No-Go, or a custom `nogo_ratio`). It measures how well the athlete separates *go* from *no-go*, independent of how willing they are to touch.
 
 ```
 H  = (hits + 0.5)         / (go trials + 1)        ← log-linear correction:
-FA = (no-go presses + 0.5) / (no-go trials + 1)       avoids infinite z for 0 % or 100 %
+FA = (no-go touches + 0.5) / (no-go trials + 1)       avoids infinite z for 0 % or 100 %
 d′ = z(H) − z(FA)
 c  = −(z(H) + z(FA)) / 2                            ← criterion (bias), API only
 ```
 
-`z` is the inverse of the standard normal CDF. Rough guide: d′ ≈ 0 means no discrimination; higher is better. A **positive c** means a cautious responder (presses less), a **negative c** an impulsive one.
+`z` is the inverse of the standard normal CDF. Rough guide: d′ ≈ 0 means no discrimination; higher is better. A **positive c** means a cautious responder (touches less), a **negative c** an impulsive one.
 
 ---
 
@@ -174,6 +178,66 @@ CoP_y = 180 × ((fl + fr) − (bl + br)) / W    ← antero-posterior (AP), + = f
 | Mean load | Mean W, in kg |
 
 The **live** balance panel uses the same CoP formula in the browser, without smoothing, for display only.
+
+---
+
+## Body tracking
+
+The camera view runs **MediaPipe Pose Landmarker** in the browser. Each frame gives 33 landmarks, as normalised image positions and as metric "world" positions in metres centred on the hips. Code: `frontend/src/pose/metrics.ts` and `tracker.ts`.
+
+- **Visible:** a landmark is used only when MediaPipe's visibility is at least **0.5**.
+- **Live only:** nothing here is stored. Frames and landmarks stay in the browser.
+- **Estimates:** these are training-aid numbers from a single 2-D camera, not motion-capture measurements.
+
+**Joint angles** come from the 3-D world landmarks, so they don't depend much on where the camera stands:
+
+| Metric | Definition |
+|---|---|
+| Knee flexion | 180° − angle(hip, knee, ankle). 0° = straight leg |
+| Hip flexion | 180° − angle(shoulder, hip, knee). 0° = trunk and thigh in line |
+| Elbow flexion | 180° − angle(shoulder, elbow, wrist). 0° = straight arm |
+| Shoulder elevation | angle(hip, shoulder, elbow). 0° = arm by the side, 90° = horizontal |
+| Left–right difference (Δ) | \|left − right\| per joint; **15° or more** is flagged amber |
+
+**Trunk and pelvis:**
+- **Trunk vector:** from mid-hip to mid-shoulder.
+- **Lateral axis:** right hip → left hip, kept horizontal.
+- **Forward axis:** at right angles to the lateral axis and vertical.
+
+| Metric | Definition |
+|---|---|
+| Side lean | Angle of the trunk vector from vertical, towards the lateral axis. **+ = towards the athlete's left.** Amber at **10°**, red at **20°** (a possible loss of balance) |
+| Forward lean | The same, towards the forward axis. Labelled an *estimate*, because depth is MediaPipe's weakest axis |
+| Shoulder tilt, hip tilt | Height difference between the left and right joint, as an angle. + = left side higher |
+| Stance | Ankle width / hip width (horizontal distances) |
+| Centred over feet | Whether the mid-hip point lies between the ankles in the image |
+
+**Movement** uses image positions, converted to metres by the athlete's own shoulder width: the world shoulder distance in metres ÷ the image distance in pixels, smoothed.
+
+| Metric | Definition |
+|---|---|
+| Lateral sway (RMS) | RMS of the mid-hip's horizontal position about its mean, over the last **10 s**, in cm |
+| Sway speed | Horizontal path length of the mid-hip ÷ duration, last 10 s, in cm/s |
+| Hip offset (chart) | The mid-hip's horizontal distance from its 10 s mean, in cm. + = towards the athlete's left |
+| Peak side lean | Largest absolute side lean in the last 10 s |
+| Wrist speed | Frame-to-frame wrist movement × scale ÷ time, smoothed, in m/s |
+
+**Posture at each touch:** the tracker listens to the hub's live events.
+- From each `stimulus_on`, it adds up how far each wrist moves.
+- At the `response`, it records:
+  - **hand:** the wrist that travelled further (blank if neither moved more than 2 cm)
+  - side lean, forward lean and mean knee flexion at that moment
+  - the peak speed of that hand
+  - the RT from the hub's own timestamps
+- The result label uses the same first-pass rules as the Live page, so the Analysis page stays authoritative.
+- **Timing:** camera frames are matched to hub events by arrival time in the browser, so the snapshot is within roughly one frame and the network delay (tens of ms) of the touch. It's not time-synchronised like the IMU.
+
+**Framing check:** in priority order, the first failing check is shown:
+1. No pose found
+2. Feet out of frame
+3. Head cut off
+4. Shoulders or hips hidden
+5. Mean visibility of the 12 main joints below **70 %**
 
 ---
 

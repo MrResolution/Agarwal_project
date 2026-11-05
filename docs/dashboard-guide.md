@@ -2,7 +2,7 @@
 
 A page-by-page guide for coaches and therapists. Every number on screen is explained in the [Metrics reference](metrics-reference.md); this guide covers what each part is for and how to use it.
 
-**Contents:** [Signing in](#signing-in) · [Navigation](#navigation) · [Dashboard](#dashboard) · [Live session](#live-session) · [Analysis](#analysis) · [Athletes](#athletes) · [Athlete profile](#athlete-profile) · [Devices](#devices) · [Phones and tablets](#phones-and-tablets) · [Troubleshooting](#troubleshooting)
+**Contents:** [Signing in](#signing-in) · [Navigation](#navigation) · [Dashboard](#dashboard) · [Live session](#live-session) · [Body tracking](#body-tracking) · [Analysis](#analysis) · [Athletes](#athletes) · [Athlete profile](#athlete-profile) · [Devices](#devices) · [Phones and tablets](#phones-and-tablets) · [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -10,8 +10,8 @@ A page-by-page guide for coaches and therapists. Every number on screen is expla
 
 1. **Athletes → Add athlete** to create the profile (once).
 2. On the athlete's profile, **Consent → Record** a *Data* consent (once). Sessions are blocked without it.
-3. **Live session:** pick the athlete and a protocol, then press **Start**.
-4. Watch the targets, feed and balance live. Press **Stop block** to end early, or **E-STOP** in an emergency.
+3. **Live session:** pick the athlete and a protocol, then press **Start**. Optionally press **Start camera** in the Body tracking card first, to watch posture too.
+4. Watch the targets, feed, balance and body tracking live. Press **Stop block** to end early, or **E-STOP** in an emergency.
 5. Press **View analysis** for the full report, and check **Progress vs baseline** on the profile over the following weeks.
 
 ---
@@ -29,7 +29,8 @@ Sign in with the coach or therapist account your admin created. *Show password* 
 ## Navigation
 
 - **Top bar:** stays at the top as you scroll.
-  - The **pill menu** switches pages: Dashboard · Live session · Analysis · Athletes · Devices. On tablets it shows icons only; hover to see each name.
+  - The **pill menu** switches pages: Dashboard · Live session · Body tracking · Analysis · Athletes · Devices. On tablets it shows icons only; hover to see each name.
+  - **Camera on** (red dot) or **Simulation** (green dot) appears while body tracking is running, on every page. Click it to open Body tracking.
   - The **bell** shows the count of open warnings and critical alerts, and opens the Devices page.
   - The **avatar** shows your account and role, plus Sign out (or the Open access note).
 - **Arrow buttons (↗)** in card headers open the related page.
@@ -66,20 +67,52 @@ Sign in with the coach or therapist account your admin created. *Show password* 
 4. **Start:** the button names the protocol. If it's disabled, the hint beside it says why (*Hub offline*, *Choose an athlete* or *Data consent missing*).
 
 **During the block:**
-- **Targets arc:**
+- **Targets arc:** the station's **6 touch-sensor targets, T1–T6**, drawn from the hub's own target list. The view is from behind the athlete, so T1 is on the athlete's left.
   - The **lit target pulses** in its cue colour: green = go, red = no-go.
-  - On a press it flashes the result colour: blue hit, amber wrong target, red no-go press, orange early.
+  - On a touch it flashes the result colour: blue hit, amber wrong target, red no-go touch, orange early.
   - The number beside each target is its latest RT.
 - **Progress:** *Trial n of N* and the progress bar.
 - **KPI tiles:** last response, median of hits, accuracy and error count. These are computed live in the browser; the Analysis page is authoritative.
-- **Response feed:** the newest result per trial, e.g. "Wrong target (pressed T7)".
+- **Response feed:** the newest result per trial, e.g. "Wrong target (touched T5)".
 - **Balance:** a live centre-of-pressure dot with a trail, the load in kg, and medio-lateral and antero-posterior position in mm.
 - **Wrist motion:** acceleration deviation from gravity. Each burst is a reach.
+- **Body tracking** (bottom card):
+  - the camera feed with the skeleton, beside live side lean, forward lean, knee bend and lateral sway
+  - **Last touch:** the target, the hand used, trunk lean, knees and wrist speed at the moment of the touch
+  - **Start camera** or **Simulated athlete** turns it on; ↗ opens the full [Body tracking](#body-tracking) page
 
 **Stopping:**
 - **Stop block** ends the block cleanly; the run is marked *aborted*.
 - **E-STOP** (red, bottom right, always visible) turns all targets off immediately, even when no block is running from this page.
 - After a block finishes, **View analysis** appears next to Start.
+
+---
+
+## Body tracking
+
+![Body tracking with the simulated athlete during a block](screenshots/16-body-tracking.png)
+
+A webcam watches the athlete. **MediaPipe Pose** runs inside the browser and draws a 33-point skeleton over the video, with the athlete's posture, joint angles and stability alongside. How every number is worked out is in the [Metrics reference](metrics-reference.md#body-tracking).
+
+**Starting it:**
+1. Put the webcam on a tripod **2.5–3.5 m in front of the athlete, at hip height**, with the whole body in frame.
+2. Choose **Camera**, pick the webcam if there's more than one, and press **Start camera**. Allow camera access when the browser asks.
+3. The first start downloads the pose model, about 6 MB; later starts are instant.
+4. No webcam? Choose **Simulated athlete**. A software athlete stands on the board and reaches for whichever target the hub lights. With no block running, it reaches for demo targets and shows a *Demo motion* tag.
+
+The camera keeps running when you switch pages; the top bar shows **Camera on**. Press **Stop** here or in the Live session card to turn it off.
+
+| Card | What it shows |
+|---|---|
+| **Camera feed** | The video with the skeleton. **Blue = the athlete's left, lime = right.**<br>• **Trunk axis:** a solid line against a dashed vertical; it turns amber at 10° of side lean and red at 20°.<br>• **Base of support:** dashes under the feet, with a diamond for the hips; lime when centred, amber when outside.<br>• **Angle labels:** flexion at the elbows and knees.<br>• **Trails:** the hips, and the wrists while reaching.<br>Toggles: **Skeleton**, **Angles**, **Trails** and **Mirror**. Mirror is on by default, so the athlete's left is on the left, as on the target arc |
+| **Posture now** | Side lean, forward lean (an estimate), shoulder tilt and hip tilt; stance width as a multiple of hip width; whether the hips are centred over the feet |
+| **Joint angles** | Knee, hip, elbow and shoulder, left beside right. **Δ** marks a left–right difference of 15° or more |
+| **Stability** | Lateral sway (RMS) and sway speed over the last 10 s, peak side lean and wrist speed. The chart shows the last 20 s of side lean (blue) and hip offset (green) against the ±10° lean flag |
+| **Tracking quality** | How visible the body is, a checklist (head, shoulders, hips, knees, feet), and a framing tip such as *Feet are out of frame*. Model choice: **Lite** (fast) or **Full** (more accurate); also shows whether it runs on GPU or CPU, the model time per frame and the frame rate |
+| **Posture at each touch** | One row per touch in the current block: target, result, **which hand reached**, side and forward lean, knee bend, peak wrist speed and RT. Matched live to the hub's events |
+| **Privacy and setup** | Video stays on this computer. Frames and landmarks are **not recorded or uploaded**, so watching live needs no video consent. Camera placement tips |
+
+> **Body tracking supports coaching; it isn't a measurement.** A single camera estimates angles, and forward lean is the least reliable. Use it to spot patterns (always reaching with one hand, leaning into one side), not for clinical values.
 
 ---
 
@@ -103,7 +136,7 @@ Sign in with the coach or therapist account your admin created. *Show password* 
 | **Target heatmap** | Each target coloured by its median RT, lime (fastest) to orange (slowest), with the ms beside it. "no hits" means the target lit but was never hit correctly |
 | **Where the time goes** | Decision vs movement split from the wrist IMU, left vs right side with the asymmetry %, and central / mid / peripheral bands. Lime marks the fastest group |
 | **Balance during the block** | The CoP path plus mean velocity, path length, 95 % ellipse area, RMS ML/AP and mean load. "Nobody was standing on the board" means the load was under 10 kg |
-| **Trials** | Every trial, including invalid ones: target, cue, result, RT, decision, movement, the target actually pressed |
+| **Trials** | Every trial, including invalid ones: target, cue, result, RT, decision, movement, the target actually touched |
 
 > **Results appear in two stages.** While a block is running, results come from the events only. Decision time and balance fill in once the block ends. The summary is finalised about 15 s after the end, once the last sensor data is on disk.
 
@@ -149,7 +182,7 @@ Only *Group* is required. A blank name uses the generated code (`ATH-000n`), and
 | Section | What to check |
 |---|---|
 | **KPI tiles** | Gateway connection and message count; events stored and duplicates dropped; sensor samples streamed and Parquet files; lost messages (gap reports); rejected (malformed) messages. Counts run *since gateway start* |
-| **Hubs** | Per hub: battery ring, online dot, station, firmware, boot ID, last seen, IP/SSID/signal, target chips (blue = OK, red = offline) and sensor streams. **Ping** checks the round trip. The summary row shows hubs online, targets ready, sensor streams and longest uptime |
+| **Hubs** | Per hub: battery ring, online dot, station, firmware, boot ID, last seen, IP/SSID/signal, target chips T1–T6 (blue = OK, red = offline) and sensor streams. **Ping** checks the round trip. The summary row shows hubs online, targets ready, sensor streams and longest uptime |
 | **Connect a hub** | The `IP:1883` address a hub on the same Wi-Fi should use, the mDNS name, and the clock-sync quality per hub (± uncertainty in ms, drift in ppm) |
 | **Alerts** | Newest first. *Info* items (online, resumed) need no action; resolve *warning* and *critical* ones once handled. Kinds are listed in [Setup and operations](setup-and-operations.md#alerts) |
 
@@ -161,7 +194,9 @@ The dashboard works on any screen. On a tablet, cards pair up two per row; on a 
 
 | Tablet | Phone |
 |---|---|
-| <img src="screenshots/09-dashboard-tablet.png" width="420" alt="Tablet"> | <img src="screenshots/10-dashboard-phone.png" width="200" alt="Phone dashboard"> <img src="screenshots/13-live-session-phone.png" width="200" alt="Phone live session"> |
+| <img src="screenshots/09-dashboard-tablet.png" width="420" alt="Tablet"> | <img src="screenshots/10-dashboard-phone.png" width="200" alt="Phone dashboard"> <img src="screenshots/13-live-session-phone.png" width="200" alt="Phone live session"> <img src="screenshots/17-body-tracking-phone.png" width="200" alt="Phone body tracking"> |
+
+The camera only opens on a secure page: on the laptop itself (`localhost`) or over https. A phone on the Wi-Fi can view the other pages, but it can't open its own camera over plain http.
 
 ---
 
@@ -177,3 +212,7 @@ The dashboard works on any screen. On a tablet, cards pair up two per row; on a 
 | **A run stays "Running"** | It finishes when the hub sends `block_done`; if the hub went silent, the run is closed as aborted after 5 min |
 | **Lost messages > 0** | Weak Wi-Fi. Timing events are re-sent where possible; sensor gaps only affect sway and onset for the affected seconds |
 | **Blank page after an update** | Hard-refresh the browser (Ctrl+F5). The error panel's **Retry** re-renders a section that failed |
+| **"Camera access was blocked"** | Allow the camera for this site (the camera icon in the address bar), then press Start camera again |
+| **"No camera found" / "camera is busy"** | Plug in the webcam, or close the other app using it (video calls) |
+| **"Couldn't load the pose model"** | The first start downloads it from Google; check the internet connection. For offline use see [Setup and operations](setup-and-operations.md#body-tracking-camera) |
+| **Skeleton jumps or vanishes** | Follow the tip on the feed: whole body in frame, even light, plain background. Try the **Full** model on a fast laptop |

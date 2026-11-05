@@ -439,3 +439,52 @@ export function SplitBar({ a, b, labels = ["Decision", "Movement"] }: { a: numbe
 }
 
 export { rtColour };
+
+// ---------------------------------------------------------------- rolling time series (body tracking)
+export interface Series { key: string; label: string; colour: string; unit: string; values: { t: number; v: number | null }[] }
+/** Several live series on one symmetric axis over the last `span` seconds (t = seconds ago, <= 0). */
+export function TimeSeries({ series, span = 20, height = 190, limit, limitLabel }: {
+  series: Series[]; span?: number; height?: number; limit?: number; limitLabel?: string;
+}) {
+  const [ref, w] = useWidth<HTMLDivElement>();
+  const pad = { l: 34, r: 10, t: 10, b: 22 };
+  const vals = series.flatMap((s) => s.values.map((p) => p.v).filter((v): v is number => v != null));
+  const yMax = niceMax(Math.max(limit ? limit * 1.2 : 0, 4, ...vals.map(Math.abs)));
+  const x = (t: number) => pad.l + (1 + t / span) * (w - pad.l - pad.r);
+  const y = (v: number) => pad.t + (1 - (v + yMax) / (2 * yMax)) * (height - pad.t - pad.b);
+  const path = (s: Series) => {
+    let d = "", pen = false;
+    for (const p of s.values) {
+      if (p.v == null || p.t < -span) { pen = false; continue; }
+      d += `${pen ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`;
+      pen = true;
+    }
+    return d;
+  };
+  return (
+    <div ref={ref}>
+      <svg width={w} height={height} role="img" aria-label={`Last ${span} seconds of ${series.map((s) => s.label).join(" and ")}`}>
+        {[-yMax, -yMax / 2, 0, yMax / 2, yMax].map((t) => (
+          <g key={t}>
+            <line x1={pad.l} x2={w - pad.r} y1={y(t)} y2={y(t)} stroke={t === 0 ? "#dfe2e8" : "#eef0f3"} strokeDasharray={t === 0 ? undefined : "3 5"} />
+            <text x={pad.l - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="#9aa0aa">{Math.round(t)}</text>
+          </g>
+        ))}
+        {[-span, -span * 0.75, -span / 2, -span / 4, 0].map((t) => (
+          <text key={t} x={x(t)} y={height - 5} fontSize="11" fill="#9aa0aa" textAnchor={t === -span ? "start" : t === 0 ? "end" : "middle"}>
+            {t === 0 ? "now" : `${Math.round(-t)} s`}
+          </text>
+        ))}
+        {limit != null && [limit, -limit].map((l) => (
+          <line key={l} x1={pad.l} x2={w - pad.r} y1={y(l)} y2={y(l)} stroke="#ffb020" strokeDasharray="6 5" strokeOpacity=".8" />
+        ))}
+        {limit != null && limitLabel && <text x={w - pad.r - 2} y={y(limit) - 5} textAnchor="end" fontSize="11" fill="#a86f00">{limitLabel}</text>}
+        {series.map((s) => <path key={s.key} d={path(s)} fill="none" stroke={s.colour} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />)}
+        {series.map((s) => {
+          const last = [...s.values].reverse().find((p) => p.v != null && p.t >= -span);
+          return last ? <circle key={s.key} cx={x(last.t)} cy={y(last.v!)} r="4.5" fill={s.colour} stroke="#fff" strokeWidth="2" /> : null;
+        })}
+      </svg>
+    </div>
+  );
+}

@@ -2,7 +2,7 @@
 
 How to install, run, configure and look after the system on a coaching laptop. The commands assume Windows PowerShell; on Linux or macOS, use `.venv/bin/` instead of `.venv\Scripts\`.
 
-**Contents:** [Requirements](#requirements) · [First-time install](#first-time-install) · [Running the system](#running-the-system) · [Simulator options](#simulator-options) · [Real hardware](#real-hardware) · [Open access (no sign-in)](#open-access-no-sign-in) · [Settings](#settings) · [Data and backups](#data-and-backups) · [Alerts](#alerts) · [Tests and checks](#tests-and-checks) · [Troubleshooting](#troubleshooting)
+**Contents:** [Requirements](#requirements) · [First-time install](#first-time-install) · [Running the system](#running-the-system) · [Simulator options](#simulator-options) · [Real hardware](#real-hardware) · [Body tracking (camera)](#body-tracking-camera) · [Open access (no sign-in)](#open-access-no-sign-in) · [Settings](#settings) · [Data and backups](#data-and-backups) · [Alerts](#alerts) · [Tests and checks](#tests-and-checks) · [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -12,7 +12,8 @@ How to install, run, configure and look after the system on a coaching laptop. T
 |---|---|
 | Python | 3.11 or newer (developed on 3.13: `py -3.13` on Windows) |
 | Node.js | 18 or newer, with npm |
-| Browser | Any current Chrome, Edge, Firefox or Safari |
+| Browser | Any current Chrome, Edge, Firefox or Safari. Body tracking runs best in Chrome or Edge (GPU) |
+| Webcam (optional) | For body tracking: any USB or built-in webcam, 720p or better, on a tripod |
 | Network | For real hardware: a router or phone hotspot that both the laptop and the hub join |
 
 ---
@@ -71,7 +72,7 @@ Open the dashboard URL and sign in. On the **Devices** page the hub should show 
 | `--discover` | off | Find the broker over mDNS, the way real firmware does (needs `svs.broker --lan`) |
 | `--station` | `station-1` | Station name the hub reports |
 | `--device` | `hub-01` | Hub device ID |
-| `--targets` | 8 | Number of LED targets |
+| `--targets` | 6 | Number of touch-sensor targets (the station has 6) |
 | `--seed` | random | Seed for the reaction model, for reproducible behaviour |
 | `--drop` | 0 | Probability (0–1) of losing a sequenced message |
 | `--dup` | 0 | Probability of delivering a message twice |
@@ -111,7 +112,44 @@ Three demo blocks over an unreliable link, to see the gateway's duplicate and ga
 3. **Allow inbound TCP 1883** through the laptop's firewall. On Windows this needs an administrator; the exact command is in [firmware/README.md](../firmware/README.md).
 4. Power the hub. The dashboard's **Devices → Connect a hub** card shows the `IP:1883` address the hub should use as a fallback, plus each connected hub's IP, SSID and signal strength.
 
+**Targets:**
+- The station has **6 targets, T1–T6**: an LED ring and a digital **touch sensor** (e.g. TTP223) each.
+- Each sensor's output goes straight to its own ESP32-S3 GPIO, and the interrupt takes the timestamp.
+- Pins, polarity and wiring are in [firmware/README.md](../firmware/README.md#touch-sensor-targets).
+- Keep hands off the pads while the hub powers up: TTP223 modules calibrate at power-on.
+
 The firmware's Wi-Fi credentials go in `firmware/svs_hub/config.h`, which is gitignored. The firmware is written against the contract but **has not yet been compiled or run on hardware**. The [Hub MQTT data scheme](hub-mqtt-data-scheme.md) is the specification it must meet.
+
+---
+
+## Body tracking (camera)
+
+Body tracking runs entirely in the dashboard's browser tab, with no extra process and no backend involvement:
+
+| Part | Where it comes from |
+|---|---|
+| Pose model | MediaPipe Pose Landmarker (Lite or Full). `@mediapipe/tasks-vision` is pinned at `0.10.35` in `frontend/package.json` |
+| Runtime (wasm, ~11 MB) | Served by the Vite dev server at `/mediapipe/wasm/` from `node_modules`, and copied into `frontend/dist/` by `npm run build`. No CDN |
+| Model file (~6 MB Lite, ~9 MB Full) | Downloaded from `storage.googleapis.com` on the first start, then cached by the browser, unless a local copy exists (below) |
+| Camera | `getUserMedia`, 1280×720 at up to 30 fps. Only works on `localhost` or https |
+
+**Setup:**
+1. Use Chrome or Edge on the laptop and open the dashboard at `http://localhost:5173` (or the port Vite prints).
+2. Put the webcam on a tripod 2.5–3.5 m in front of the athlete, at hip height, with the whole body in frame.
+3. On **Body tracking**, press **Start camera** and allow access.
+4. Expect about 25 ms of model time per frame on a laptop GPU. If the Runs on row says CPU, keep the **Lite** model.
+
+**Offline use (no internet at the venue):** download the model once and put it in `frontend/public/models/`; the dashboard then uses the local copy automatically. These files are gitignored.
+
+```bash
+curl -L --create-dirs -o frontend/public/models/pose_landmarker_lite.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task
+```
+
+For the Full model, use the same URL and file name with `full` in place of `lite`.
+
+**Privacy:** frames and landmarks never leave the browser, and nothing is recorded. Watching live therefore needs no video consent. Storing video or landmarks later would require the athlete's **video** consent, as the consent model already provides.
+
+**Without a camera:** the **Simulated athlete** source draws a synthetic 33-point athlete. It reaches for whichever target the hub lights, so the whole page and the Live session card can be demonstrated with the hub simulator alone.
 
 ---
 
@@ -236,5 +274,7 @@ What the tests cover is listed in [Architecture → Testing](architecture.md#tes
 | Real hub never appears | Same Wi-Fi? Firewall open for TCP 1883? Broker started with `--lan`? Is the IP on *Connect a hub* the one the hub uses? |
 | Clock sync shows large ± values | Congested Wi-Fi. Reaction times are unaffected (they use hub timestamps); only cross-device alignment is less precise |
 | Events show `clock_quality = "arrival"` | They arrived before the first clock sync with that hub, so they carry arrival time. Reaction times are unaffected |
+| Camera won't start | Open the dashboard on the laptop itself (`localhost`), allow camera access, and close other apps using the webcam. The message on the feed says which of these it is |
+| Pose model doesn't load | First start needs internet access to `storage.googleapis.com`, or a local copy in `frontend/public/models/` (see [Body tracking](#body-tracking-camera)) |
 
 Dashboard-side symptoms (Start disabled, runs stuck on *Running*, missing decision time) are covered in the [Dashboard guide](dashboard-guide.md#troubleshooting).

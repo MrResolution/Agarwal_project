@@ -15,17 +15,18 @@
 #define DEVICE_ID "hub-01"       // unique per hub
 #define FIRMWARE_VERSION "0.1.0"
 
-// ---------------------------------------------------------------- targets (LED + button)
-#define N_TARGETS 8
+// ---------------------------------------------------------------- targets (LED ring + touch sensor)
+#define N_TARGETS 6
 #define LED_PIN 16               // WS2812B data, through the 74AHCT125 level shifter
-#define LEDS_PER_TARGET 12       // 12-LED ring per target, rings chained in target order T1..TN
+#define LEDS_PER_TARGET 12       // 12-LED ring per target, rings chained in target order T1..T6
 #define LED_BRIGHTNESS 120       // 0-255; full white draws ~60 mA per LED
 
-// Buttons: MCP23017 at 0x20 on I2C bus 0, target i on expander pin i (GPA0..), INTA -> MCP_INT_PIN.
-// The ISR on MCP_INT_PIN takes the timestamp, so the I2C read afterwards adds no timing error.
-#define MCP_ADDR 0x20
-#define MCP_INT_PIN 10
-#define BUTTON_DEBOUNCE_MS 150
+// Touch sensors: one digital touch module per target (e.g. TTP223), its OUT pin wired straight to a
+// GPIO. Every pin has its own interrupt and the ISR takes the timestamp, so there is no shared-bus delay.
+// TTP223 default: OUT is HIGH while touched (active high). Set 0 for modules jumpered to active low.
+static const int TOUCH_PINS[N_TARGETS] = {4, 5, 6, 7, 17, 18};  // T1..T6
+#define TOUCH_ACTIVE_HIGH 1
+#define TOUCH_LOCKOUT_MS 150     // ignore re-triggers of the same target for this long
 
 // ---------------------------------------------------------------- I2C bus 0
 #define I2C0_SDA 8

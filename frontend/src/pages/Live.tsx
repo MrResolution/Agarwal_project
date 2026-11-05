@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  Activity, Ban, BarChart3, BatteryMedium, Crosshair, Eye, Footprints, Hand, ListChecks, ListOrdered, OctagonX, Play,
-  ShieldAlert, Shuffle, Square, Target, Timer, UserRound, Wifi, Zap,
+  Activity, Ban, BarChart3, BatteryMedium, Crosshair, Eye, Footprints, Hand, ListChecks, ListOrdered, OctagonX, PersonStanding, Play,
+  ScanLine, ShieldAlert, Shuffle, Square, Target, Timer, UserRound, Video, Wifi, Zap,
 } from "lucide-react";
+import { leanTone, sideLabel } from "../pose/metrics";
+import { PoseCanvas, usePose } from "../pose/PoseContext";
 import { api, type Protocol, type Run } from "../api";
 import { CopPlot, Sparkline, TargetArc, type ArcTarget } from "../charts";
-import { copFromCorners, RESULT_COLOUR, RESULT_LABEL, useAsync, useStationFeed, type FeedMessage } from "../lib";
+import { arcLayout, copFromCorners, DEFAULT_TARGETS, RESULT_COLOUR, RESULT_LABEL, useAsync, useStationFeed, type FeedMessage } from "../lib";
 import { Card, CountUp, Empty, Kpi, Progress, Skeleton, StatusChip, useToast } from "../ui";
 
 const STATION = "station-1";
-const LAYOUT = Array.from({ length: 8 }, (_, i) => ({ id: `T${i + 1}`, angle: -70 + i * 20, row: i % 2 === 0 ? "upper" : "lower" }));
 const COLOURS: Record<string, string> = { green: "#cff25c", red: "#ff3b30", blue: "#1f5eff", yellow: "#ffd33d", white: "#ffffff" };
 
 interface LiveTrial { key: string; trial_no: number; target: string; nogo: boolean; t_stim: number; rt?: number; result?: string; pressed?: string }
@@ -138,7 +139,10 @@ export default function Live() {
   const running = run && !blockDone && run.status !== "failed";
   const lastRt = [...trials].reverse().find((t) => t.rt != null)?.rt ?? null;
 
-  const arc: ArcTarget[] = useMemo(() => LAYOUT.map((t) => {
+  // The hub reports its targets (6 touch sensors on the standard station); lay the arc out from that.
+  const nTargets = (hub?.targets as unknown[] | undefined)?.length || DEFAULT_TARGETS;
+  const layout = useMemo(() => arcLayout(nTargets), [nTargets]);
+  const arc: ArcTarget[] = useMemo(() => layout.map((t) => {
     const isLit = lit?.target === t.id;
     const isFlash = flash?.target === t.id;
     return {
@@ -148,7 +152,7 @@ export default function Live() {
       pulse: isLit,
       sub: (() => { const last = [...trials].reverse().find((x) => x.target === t.id && x.rt != null); return last ? `${last.rt!.toFixed(0)}` : undefined; })(),
     };
-  }), [lit, flash, trials]);
+  }), [layout, lit, flash, trials]);
 
   const blocker = !hub?.online ? "Hub offline" : !athlete ? "Choose an athlete" : !athlete.consent.data ? "Data consent missing" : null;
 
@@ -234,7 +238,7 @@ export default function Live() {
             <div key={t.key} className="feed-row">
               <span className="chip" style={{ justifyContent: "center", padding: 0 }}>{t.target}</span>
               <span style={{ color: t.result ? RESULT_COLOUR[t.result] === "#cff25c" ? "#5a7000" : RESULT_COLOUR[t.result] : "var(--muted)" }}>
-                {t.result ? RESULT_LABEL[t.result] : "lit…"}{t.pressed && t.pressed !== t.target ? ` (pressed ${t.pressed})` : ""}
+                {t.result ? RESULT_LABEL[t.result] : "lit…"}{t.pressed && t.pressed !== t.target ? ` (touched ${t.pressed})` : ""}
               </span>
               <b>{t.rt != null ? `${t.rt.toFixed(0)} ms` : ""}</b>
             </div>
@@ -256,6 +260,8 @@ export default function Live() {
           </div></div>
           <p className="hint mt-12">Bursts mark movement onset. Analysis splits each response into decision and movement time from the full-rate stream.</p>
         </Card>
+
+        <BodyTrackingCard />
       </div>
 
       <button className="estop" onClick={() => stop(true)} aria-label="Emergency stop: turn off all targets"><OctagonX size={20} />E-STOP</button>
@@ -264,3 +270,42 @@ export default function Live() {
 }
 
 const PROTO_ICON: Record<string, typeof Zap> = { simple_rt: Zap, choice_rt: Shuffle, go_nogo: Ban, peripheral: Eye, speed_drill: Timer };
+
+/** Camera feed with the skeleton, beside the live posture numbers and the posture at the last touch. */
+function BodyTrackingCard() {
+  const [tracker, snap] = usePose();
+  const running = snap.status === "running";
+  const m = snap.metrics;
+  const last = snap.responses[0];
+  const knees = [m?.knee.L, m?.knee.R].filter((v): v is number => v != null);
+  const buttons = (
+    <div className="row wrap" style={{ justifyContent: "center", gap: 8, marginTop: 12 }}>
+      <button className="btn sm lime" onClick={() => void tracker.start("camera")}><Video size={14} />Start camera</button>
+      <button className="btn sm ghost light" onClick={() => void tracker.start("sim")}><PersonStanding size={14} />Simulated athlete</button>
+    </div>
+  );
+  return (
+    <Card className="span-12" i={10} icon={<ScanLine size={18} />} iconTone="blue" title="Body tracking" to="/tracking"
+      sub={running ? (snap.source === "camera" ? `Camera · ${snap.guidance.text}` : "Simulated athlete · reaches for the lit target") : "Camera feed with a 33-point skeleton"}
+      action={running ? <button className="btn sm ghost" onClick={() => tracker.stop()}><Square size={13} />Stop</button> : undefined}>
+      <div className="body-live">
+        <PoseCanvas compact idle={buttons} />
+        <div className="body-live-side">
+          <div className="metric-grid">
+            <div className={`metric ${leanTone(m?.trunkLean ?? null)}`}><div className="l">Side lean</div><div className="v">{sideLabel(m?.trunkLean ?? null)}</div></div>
+            <div className="metric"><div className="l">Forward lean</div><div className="v">{m?.trunkForward != null ? `${m.trunkForward.toFixed(0)}°` : "–"}</div></div>
+            <div className="metric"><div className="l">Knee bend</div><div className="v">{knees.length ? `${(knees.reduce((a, b) => a + b, 0) / knees.length).toFixed(0)}°` : "–"}</div></div>
+            <div className="metric"><div className="l">Lateral sway</div><div className="v">{snap.stability.swayRmsCm != null ? `${snap.stability.swayRmsCm.toFixed(1)}` : "–"}<small> cm</small></div></div>
+          </div>
+          <div className="insight mt-12">
+            <h4><Hand size={15} />Last touch</h4>
+            {last
+              ? <>{last.target}{last.touched && last.touched !== last.target ? ` (touched ${last.touched})` : ""} · {last.hand === "L" ? "left hand" : last.hand === "R" ? "right hand" : "hand unclear"} · {sideLabel(last.lean)} lean · {last.knee != null ? `${last.knee.toFixed(0)}° knees` : "knees –"}{last.peakSpeed != null ? ` · ${last.peakSpeed.toFixed(1)} m/s` : ""}</>
+              : running ? "Waiting for the first touch of a block." : "Start body tracking to see posture at every touch."}
+          </div>
+          <Link className="btn sm ghost mt-12" to="/tracking" style={{ alignSelf: "flex-start" }}><ScanLine size={14} />Full body-tracking view</Link>
+        </div>
+      </div>
+    </Card>
+  );
+}

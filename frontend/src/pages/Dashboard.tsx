@@ -8,7 +8,7 @@ import { api, type Analysis, type Overview, type Run } from "../api";
 import { useMe } from "../App";
 import { PodsArt } from "../art";
 import { BarChart, DotMatrix, Gauge, Lollipops, Radar, Sparkline, TargetArc } from "../charts";
-import { athleteLabel, axisLabels, initials, insights, ms, pct, skillProfile, useAsync, useStationFeed, when, type FeedMessage } from "../lib";
+import { arcLayout, athleteLabel, axisLabels, initials, insights, ms, pct, skillProfile, useAsync, useStationFeed, when, type FeedMessage } from "../lib";
 import { Card, CountUp, Empty, ErrorBoundary, Progress, Skeleton, StatusChip } from "../ui";
 
 const PROTO_NAMES: Record<string, string> = {
@@ -315,8 +315,8 @@ function LiveStationCard({ className, overview }: { className?: string; overview
           </div>
         ) : (
           <div style={{ animation: "fade .4s both" }}>
-            <TargetArc height={170} athlete targets={(targets.length ? targets : Array.from({ length: 8 }, (_, i) => ({ id: `T${i + 1}`, online: false })))
-              .map((t, i, all) => ({ id: t.id, row: "upper", angle: all.length > 1 ? -70 + (140 / (all.length - 1)) * i : 0, fill: t.online ? "#cff25c" : "#f1f2f5" }))} />
+            <TargetArc height={170} athlete targets={(targets.length ? targets : arcLayout().map((t) => ({ id: t.id, online: false })))
+              .map((t, i, all) => ({ id: t.id, row: "upper", angle: arcLayout(all.length)[i]!.angle, fill: t.online ? "#cff25c" : "#f1f2f5" }))} />
             <div className="hint" style={{ justifyContent: "center" }}>{targets.length ? `${targets.filter((t) => t.online).length} of ${targets.length} targets ready` : "No target data yet"}</div>
           </div>
         )}

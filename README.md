@@ -6,9 +6,9 @@ An affordable, portable, and smart training system combining LED reaction target
 
 ## Repository Contents
 
-- **[`frontend/`](frontend/README.md)**: coach dashboard (React + TypeScript): dashboard, live session, analysis, athletes, devices.
+- **[`frontend/`](frontend/README.md)**: coach dashboard (React + TypeScript): dashboard, live session, body tracking (webcam + MediaPipe Pose in the browser), analysis, athletes, devices.
 - **[`backend/`](backend/README.md)**: FastAPI API, device gateway, analysis engine (reaction scoring, decision/movement split, balance), hub simulator.
-- **[`firmware/`](firmware/README.md)**: reference ESP32-S3 hub firmware.
+- **[`firmware/`](firmware/README.md)**: reference ESP32-S3 hub firmware for the 6 touch-sensor targets, wrist IMU and balance board.
 - **[`docs/`](docs/README.md)**: project and dashboard documentation (see [Documentation](#documentation) below), plus the [screenshots](docs/screenshots/).
 - **`info/`**
   - [`Sports Vision & Reflex System Documentation.md`](info/Sports%20Vision%20&%20Reflex%20System%20Documentation.md): Comprehensive system documentation, hardware architecture, sensor integration, state machines, and implementation blueprints.
@@ -40,13 +40,28 @@ The [docs index](docs/README.md) has reading paths for each role.
 
 ## Screenshots
 
-Captured from the running system with the simulated hub; all data is real output of the analysis engine.
+Captured from the running system with the simulated hub (and, for body tracking, the simulated athlete); all data is real output of the analysis engine.
 
 ### Live session
 
-A block running on the hub: the lit target (T4), trial progress, response feed with classification, live KPIs, centre of pressure from the balance board, wrist-motion bursts and an always-visible E-STOP.
+A block running on the hub's 6 touch-sensor targets. The screen shows:
+- the lit target (T1), trial progress, the response feed with classification and live KPIs
+- centre of pressure from the balance board and wrist-motion bursts
+- body tracking, with the athlete reaching for the same target, and an always-visible E-STOP
 
 ![Live session mid-block](docs/screenshots/03-live-session-running.png)
+
+### Body tracking
+
+A webcam feed with a 33-point skeleton (MediaPipe Pose, running in the browser; video is never recorded or uploaded). The page shows:
+- live trunk lean, tilts and joint angles (left vs right)
+- 20 s of sway and lean
+- a framing checklist
+- the posture at each touch of the current block: the hand used, trunk lean, knee bend and wrist speed
+
+Shown here with the simulated athlete, which reaches for whichever target the hub lights.
+
+![Body tracking](docs/screenshots/16-body-tracking.png)
 
 ### Analysis report
 
@@ -88,5 +103,14 @@ The layout adapts to every width: cards pair up two per row on tablets and stack
   </tr>
   <tr>
     <td>Tablet (1024 px)</td><td>Phone: dashboard</td><td>Phone: live session</td><td>Phone: analysis and runs</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td><img src="docs/screenshots/17-body-tracking-phone.png" alt="Body tracking on a phone"></td>
+    <td><img src="docs/screenshots/18-body-tracking-phone-posture.png" alt="Posture and joint angles on a phone"></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td></td><td>Phone: body tracking</td><td>Phone: posture and joint angles</td><td></td>
   </tr>
 </table>

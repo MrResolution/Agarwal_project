@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..gateway.sink import read_stream
-from ..models import DeviceEvent
+from ..models import Device, DeviceEvent
 from .balance import sway_metrics
-from .layout import default_layout
+from .layout import DEFAULT_N_TARGETS, default_layout
 from .scoring import ScoringRules, detect_onset, score_trials, summarize
 
 
@@ -34,6 +34,19 @@ def _event_dict(e: DeviceEvent) -> dict[str, Any]:
     return {"type": e.type, "trial_no": e.trial_no, "target_id": e.target_id, "t_hub_us": e.t_hub_us, "payload": e.payload}
 
 
+def target_count(db: Session, events: list[DeviceEvent]) -> int:
+    """How many targets the block's hub had: the count it reports in its status, or the highest
+    target number seen in the block (so blocks recorded on a larger station keep their layout)."""
+    dev = db.get(Device, events[0].device_id) if events else None
+    reported = len((dev.last_status or {}).get("targets") or []) if dev else 0
+    seen = 0
+    for e in events:
+        for tid in (e.target_id, (e.payload or {}).get("target_id")):
+            if isinstance(tid, str) and tid[:1] in ("T", "t") and tid[1:].isdigit():
+                seen = max(seen, int(tid[1:]))
+    return max(reported or DEFAULT_N_TARGETS, seen)
+
+
 def _streams_for(streams_dir: Path, station: str, kind: str, boot_id: str, t_from: int, t_to: int):
     base = Path(streams_dir) / station / kind
     if not base.exists():
@@ -49,12 +62,15 @@ def _streams_for(streams_dir: Path, station: str, kind: str, boot_id: str, t_fro
 
 
 def analyse_block(db: Session, block_id: str, streams_dir: Path, rules: ScoringRules = ScoringRules(),
-                  n_targets: int = 8, include_streams: bool | None = None) -> dict[str, Any] | None:
+                  n_targets: int | None = None, include_streams: bool | None = None) -> dict[str, Any] | None:
     """``include_streams=None`` reads IMU/balance streams only once the block has finished;
-    while it runs, scoring uses events alone (cheap enough to poll)."""
+    while it runs, scoring uses events alone (cheap enough to poll). ``n_targets=None`` uses
+    the hub's own target count (see :func:`target_count`)."""
     events = block_events(db, block_id)
     if not events:
         return None
+    if n_targets is None:
+        n_targets = target_count(db, events)
     station, device_id, boot_id = events[0].station, events[0].device_id, events[0].boot_id
     t_start, t_end = events[0].t_hub_us, events[-1].t_hub_us
     trials = score_trials([_event_dict(e) for e in events], rules)

@@ -35,7 +35,7 @@ The hub **subscribes** to `hub/cmd` (QoS 1) and `sync/ping` (QoS 0) and **publis
 | `device_id` | string (1–64) | Unique per hub, e.g. `"hub-01"`. Never changes. |
 | `boot_id` | string (1–64) | **New random value on every power-on**, e.g. 8 hex characters `"3fa91c07"`. Tells the server the hub restarted, so clocks and sequence numbers start over. |
 | `seq` | int ≥ 0 | Starts at **0 on each boot** and increases by **exactly 1** per message. There is a **separate counter per channel**: one for `events`, one for each stream topic. Status, acks and pongs carry no `seq`. |
-| `t_us`, `t0_us`, `t1`, `t2` | int (µs) | Hub clock from `esp_timer_get_time()`, captured **at the hardware event**: in the button interrupt, or right after the LED frame is latched. **Never** the time a message is sent. These are the only timestamps used for reaction time. |
+| `t_us`, `t0_us`, `t1`, `t2` | int (µs) | Hub clock from `esp_timer_get_time()`, captured **at the hardware event**: in the touch-sensor interrupt, or right after the LED frame is latched. **Never** the time a message is sent. These are the only timestamps used for reaction time. |
 
 Why these rules matter:
 - **Duplicates:** MQTT QoS 1 may deliver a message twice. The gateway drops any repeated `(device_id, boot_id, channel, seq)`.
@@ -82,7 +82,7 @@ Why these rules matter:
 | `uptime_s` | no | seconds since boot |
 | `ip`, `mac`, `ssid` | no | shown by `GET /network` for setup and diagnostics |
 | `errors` | no | short error codes, e.g. `["imu_not_found"]` |
-| `targets` | no | one entry per LED target: `id`, `online`, optional `battery_pct` (for wireless nodes) |
+| `targets` | no | one entry per target (LED ring + touch sensor; **6** on the standard station, `T1`–`T6`): `id`, `online`, optional `battery_pct` (for wireless nodes). The server plans trials and lays out the arc from this count |
 | `sensors` | no | stream ids this hub publishes, as `"{kind}/{sensor_id}"` |
 
 **Last-Will.** Register it when connecting: same topic, QoS 1, retained. The broker publishes it if the hub disappears without disconnecting.
@@ -128,7 +128,7 @@ The server calculates **reaction time = `response.t_us − stimulus_on.t_us` = 3
 | `t_us` | int | yes | hub clock at the hardware event |
 | `block_id` | string | for block/trial events | the `block_id` from `start_block` |
 | `trial_no` | int | for trial events | the `trial_no` from the trial spec |
-| `target_id` | string | for trial events | `"T1"`…`"TN"`. For `response` / `false_start` this is the target **actually pressed** |
+| `target_id` | string | for trial events | `"T1"`…`"TN"`. For `response` / `false_start` this is the target **actually touched** |
 | `colour` | string | `stimulus_on` | `green`, `red`, `blue`, `yellow`, `white` |
 | `force` | float | no | peak FSR reading for a hit, if the target has one |
 | `backfill` | bool | no | `true` when replayed after a Wi-Fi outage (default `false`) |
@@ -140,8 +140,8 @@ The server calculates **reaction time = `response.t_us − stimulus_on.t_us` = 3
 |---|---|---|
 | `block_started` | right after accepting `start_block` | `data.n_trials` |
 | `stimulus_on` | the LED has visibly turned on (stamp right after `strip.show()` returns) | `trial_no`, `target_id`, `colour`, `data.is_nogo` |
-| `response` | a target is pressed while the stimulus is on | `trial_no`, `target_id` (pressed), optional `force` |
-| `false_start` | a target is pressed during the foreperiod, before the light | `trial_no`, `target_id` (pressed) |
+| `response` | a target is touched while the stimulus is on | `trial_no`, `target_id` (touched), optional `force` |
+| `false_start` | a target is touched during the foreperiod, before the light | `trial_no`, `target_id` (touched) |
 | `stimulus_off` | the LED turns off (after a response, or the window expires) | `trial_no`, `target_id` |
 | `block_done` | every trial in the block has finished | `data: {"trials", "responses", "false_starts"}` |
 | `block_aborted` | the block was stopped by `stop` / `estop` | `data.reason` (`"stop"` / `"estop"`) |
@@ -154,9 +154,9 @@ The hub only **reports what happened**. Hit, wrong target, miss, no-go false ala
 ```
 start_block ─► block_started
    for each trial:
-     FOREPERIOD  (wait foreperiod_ms; any press here ─► false_start)
+     FOREPERIOD  (wait foreperiod_ms; any touch here ─► false_start)
      LED ON      ─► stimulus_on
-     WINDOW      (until window_ms; first press ─► response, ends the window)
+     WINDOW      (until window_ms; first touch ─► response, ends the window)
      LED OFF     ─► stimulus_off
      ITI         (wait iti_ms)
    ─► block_done
@@ -285,7 +285,7 @@ From many exchanges the server fits `server_time ≈ a × hub_time + b`, which g
 | `colour` | string | `"green"` | `green` / `red` / `blue` / `yellow` / `white` |
 | `foreperiod_ms` | int | none | 0–60000 (wait before the light) |
 | `window_ms` | int | 1500 | 1–60000 (response window after the light) |
-| `is_nogo` | bool | `false` | the athlete should **not** press |
+| `is_nogo` | bool | `false` | the athlete should **not** touch the target |
 | `iti_ms` | int | 500 | 0–60000 (pause after the trial) |
 
 The reference firmware accepts up to 64 trials per block, and commands up to 8 KB.

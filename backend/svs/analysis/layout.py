@@ -2,11 +2,14 @@
 
 Until device calibration (M3) stores the measured layout, a default is used: N targets on a
 horizontal arc from -70 deg (left) to +70 deg (right), T1 leftmost, alternating upper/lower row.
+The station has 6 touch-sensor targets: -70, -42, -14, +14, +42, +70 deg.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+
+DEFAULT_N_TARGETS = 6  # touch-sensor targets on the station; a hub reports its own count in status
 
 
 @dataclass(frozen=True)
@@ -34,7 +37,7 @@ class TargetPos:
         return {**asdict(self), "side": self.side, "eccentricity_deg": self.eccentricity_deg, "band": self.band}
 
 
-def default_layout(n_targets: int = 8, span_deg: float = 140.0) -> dict[str, TargetPos]:
+def default_layout(n_targets: int = DEFAULT_N_TARGETS, span_deg: float = 140.0) -> dict[str, TargetPos]:
     if n_targets == 1:
         return {"T1": TargetPos("T1", 0.0, "upper")}
     step = span_deg / (n_targets - 1)

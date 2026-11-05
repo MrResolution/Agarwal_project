@@ -9,9 +9,10 @@ This document explains how the system is put together: the processes, how data f
 ```mermaid
 flowchart LR
     subgraph Hardware["Station (same Wi-Fi)"]
-        HUB["ESP32-S3 hub<br/>LED targets · buttons<br/>wrist IMU · balance board"]
+        HUB["ESP32-S3 hub<br/>6 LED targets · touch sensors<br/>wrist IMU · balance board"]
         SIM["Hub simulator<br/>(python -m svs.simulator)"]
     end
+    CAM["Webcam<br/>(USB / built-in)"]
     subgraph Laptop
         BRK["MQTT broker<br/>:1883 (amqtt / Mosquitto)<br/>mDNS: svs-gateway.local"]
         subgraph API["API process (uvicorn :8000)"]
@@ -22,7 +23,10 @@ flowchart LR
         DB[("SQLite<br/>data/svs.db")]
         PQ[("Parquet streams<br/>data/streams/")]
         UI["Dashboard<br/>(Vite :5173 → /api proxy)"]
+        POSE["Body tracking in the browser<br/>MediaPipe Pose (wasm/GPU)"]
     end
+    CAM -- "video (stays in the browser)" --> POSE
+    POSE --- UI
     HUB <-- "MQTT (JSON)" --> BRK
     SIM <-- "MQTT (JSON)" --> BRK
     BRK <--> GW
@@ -40,7 +44,7 @@ flowchart LR
 |---|---|---|---|
 | MQTT broker | `python -m svs.broker --lan` | 1883 | Message bus between hubs and the gateway. With `--lan` it listens on the Wi-Fi network and advertises itself over mDNS |
 | API + gateway | `uvicorn --factory svs.main:create_app` | 8000 | One process: REST API, WebSocket live feed, and the device gateway subscribed to MQTT |
-| Dashboard | `npm run dev` (in `frontend/`) | 5173 | React app; proxies `/api/*` (including the WebSocket) to :8000, so the browser needs no CORS |
+| Dashboard | `npm run dev` (in `frontend/`) | 5173 | React app; proxies `/api/*` (including the WebSocket) to :8000, so the browser needs no CORS. Also serves the MediaPipe wasm runtime at `/mediapipe/wasm/` |
 | Hub | ESP32-S3 firmware, or `python -m svs.simulator` | n/a | Runs blocks, timestamps events, streams sensors |
 
 ---
@@ -145,13 +149,25 @@ It also sends commands (`start_block`, `stop`, `estop`, `ping`, `config`) and wa
 | `lib.ts` | Formatting, colour scales, **skill radar** and **coach insight** rules, `useAsync` polling hook, `useStationFeed` WebSocket hook |
 | `charts.tsx` | Hand-built SVG charts: line, bar, lollipop, histogram, sparkline, radar, gauge, dot matrix, target arc/heatmap, CoP plot, trial strip |
 | `ui.tsx` | Card, KPI tile, count-up numbers, progress, modal, toasts, status chip, error boundary |
-| `pages/` | `Dashboard`, `Live`, `Analysis`, `Athletes`, `AthleteDetail`, `Devices`, `Login` |
+| `pages/` | `Dashboard`, `Live`, `Tracking` (body tracking), `Analysis`, `Athletes`, `AthleteDetail`, `Devices`, `Login` |
+| `pose/landmarks.ts` | The 33 MediaPipe landmarks, skeleton connections, left/right sides |
+| `pose/metrics.ts` | Posture from one frame: joint flexion (3-D world landmarks), trunk lean, tilts, stance, framing checks |
+| `pose/tracker.ts` | `PoseTracker`: camera (`getUserMedia`) or simulated source, MediaPipe Pose Landmarker (GPU, CPU fallback), the frame loop, sway and wrist speed, posture at each touch, throttled snapshots for React |
+| `pose/simulator.ts` | `SimAthlete`: a synthetic 33-landmark athlete (two-bone IK) that reaches for the lit target, projected through a virtual camera |
+| `pose/draw.ts` | Canvas renderer: video or studio backdrop, skeleton, trunk axis, base of support, trails, angle labels |
+| `pose/PoseContext.tsx` | App-wide provider (one tracker, so the camera survives page changes), `usePose` hook, `<PoseCanvas>` |
 | `styles.css` | Design tokens, layout grid, components, animations, responsive rules |
 
 **How data reaches the screen:**
 - Pages poll REST every 5–15 s.
 - The Live page and the dashboard's Live station card hold a WebSocket to `/api/ws/stations/{station}` and compute live RTs from `stimulus_on`/`response` pairs in the browser.
 - Authoritative scoring always comes from the backend analysis.
+
+**Body tracking:**
+- **Where it runs:** wholly in the browser. The camera frame goes to MediaPipe's `detectForVideo`, then to the metrics. Every mounted `<PoseCanvas>` is redrawn each frame, and React receives a snapshot 8 times a second.
+- **Hub events:** while tracking is on, the provider also listens to the station WebSocket. Each `stimulus_on` → `response` pair becomes a posture-at-touch row, and the simulated athlete reaches for the lit target.
+- **Loading:** `@mediapipe/tasks-vision` is loaded lazily, as its own chunk, only when tracking starts. A small Vite plugin in `vite.config.ts` serves its wasm from `node_modules` (dev) and copies it into the build.
+- **Backend:** none is needed, and nothing is sent to the server.
 
 ---
 
@@ -165,6 +181,7 @@ It also sends commands (`start_block`, `stop`, `estop`, `ping`, `config`) and wa
 - **Admin-only:** user management, the audit log and hard-deleting athletes.
 - **Open access** (`SVS_OPEN_ACCESS=true`, local prototype only): requests **from this computer** without a token act as the first admin. Requests from other devices still need a login, and a bad token is still rejected.
 - **Privacy tools:** per-athlete JSON export, anonymise (identifying fields removed, code kept), hard delete. Consent gates session start.
+- **Camera:** video and pose landmarks stay in the browser and are never stored or uploaded, so live viewing needs no video consent. Storing pose data later would be gated on the existing **video** consent type. Browsers only allow the camera on `localhost` or https.
 - **Known gaps:**
   - The dev broker accepts anonymous MQTT; production needs Mosquitto with TLS and per-device credentials.
   - The JWT travels in the WebSocket URL, so it appears in access logs.
@@ -181,4 +198,4 @@ Run `pytest` in `backend/`: 49 tests. They cover:
 - **End to end:** a full API → broker → simulator → analysis run, checked against the simulator's ground truth
 - **Networking:** LAN and mDNS discovery
 
-The frontend is checked with `npm run typecheck` and `npm run build`, and visually in the browser at 1440, 1280, 1024 and 375 px.
+The frontend is checked with `npm run typecheck` and `npm run build`, and visually in the browser at 1440, 1280, 1024 and 375 px. Body tracking was run end to end with the simulated athlete during real hub blocks, and the MediaPipe runtime and model were loaded and timed in the browser (GPU delegate, about 25 ms per 720p frame).

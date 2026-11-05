@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { Activity, BarChart3, Bell, Cpu, LayoutGrid, LogOut, Users } from "lucide-react";
+import { Activity, BarChart3, Bell, Cpu, LayoutGrid, LogOut, PersonStanding, Users } from "lucide-react";
 import { api, getToken, onAuthLost, setToken, STAFF, type Me } from "./api";
 import { initials, useAsync } from "./lib";
+import { PoseProvider, usePose } from "./pose/PoseContext";
 import { ErrorBoundary, useDismiss } from "./ui";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -11,6 +12,9 @@ import AnalysisPage from "./pages/Analysis";
 import Athletes from "./pages/Athletes";
 import AthleteDetail from "./pages/AthleteDetail";
 import Devices from "./pages/Devices";
+import Tracking from "./pages/Tracking";
+
+const STATION = "station-1";
 
 const MeCtx = createContext<Me | null>(null);
 export const useMe = () => useContext(MeCtx)!;
@@ -30,6 +34,7 @@ export function BrandMark({ size = 40 }: { size?: number }) {
 const LINKS = [
   { to: "/", label: "Dashboard", icon: LayoutGrid, end: true },
   { to: "/live", label: "Live session", icon: Activity },
+  { to: "/tracking", label: "Body tracking", icon: PersonStanding },
   { to: "/analysis", label: "Analysis", icon: BarChart3 },
   { to: "/athletes", label: "Athletes", icon: Users },
   { to: "/devices", label: "Devices", icon: Cpu },
@@ -64,6 +69,19 @@ function Nav() {
   );
 }
 
+/** Shown while the camera (or the simulated athlete) is running, on every page. */
+function TrackingChip() {
+  const [, snap] = usePose();
+  const nav = useNavigate();
+  if (snap.status !== "running") return null;
+  const cam = snap.source === "camera";
+  return (
+    <button className="track-chip" onClick={() => nav("/tracking")} title={cam ? "The camera is on (not recorded). Open body tracking" : "Simulated athlete running. Open body tracking"}>
+      <span className={`rec-dot ${cam ? "" : "sim"}`} /><span className="t">{cam ? "Camera on" : "Simulation"}</span>
+    </button>
+  );
+}
+
 function TopBar({ me, onLogout, openAccess }: { me: Me; onLogout: () => void; openAccess: boolean }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -83,6 +101,7 @@ function TopBar({ me, onLogout, openAccess }: { me: Me; onLogout: () => void; op
       <NavLink to="/" className="brand" aria-label="VisionReflex home"><BrandMark /><span className="name">VisionReflex</span></NavLink>
       <Nav />
       <div className="top-actions" ref={menuRef}>
+        <TrackingChip />
         <button className="icon-btn" onClick={() => nav("/devices")} aria-label={urgent ? `${urgent} open alerts` : "Alerts"} title="Alerts">
           <Bell size={18} />{urgent > 0 && <span className="dot-badge">{urgent > 9 ? "9+" : urgent}</span>}
         </button>
@@ -148,6 +167,7 @@ export default function App() {
   const section = "/" + (loc.pathname.split("/")[1] ?? "");
   return (
     <MeCtx.Provider value={me}>
+      <PoseProvider station={STATION}>
       <div className="app">
         <TopBar me={me} onLogout={logout} openAccess={openAccess && !getToken()} />
         <main className="main">
@@ -162,12 +182,14 @@ export default function App() {
                 <Route path="/athletes" element={<Athletes />} />
                 <Route path="/athletes/:id" element={<AthleteDetail />} />
                 <Route path="/devices" element={<Devices />} />
+                <Route path="/tracking" element={<Tracking />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
           </ErrorBoundary>
         </main>
       </div>
+      </PoseProvider>
     </MeCtx.Provider>
   );
 }

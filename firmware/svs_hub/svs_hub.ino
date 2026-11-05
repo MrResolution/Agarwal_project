@@ -8,11 +8,13 @@
 //   svs/{station}/hub/ack      command acknowledgements                       QoS1
 // and subscribes to svs/{station}/hub/cmd and svs/{station}/sync/ping.
 //
-// Timing rule: every t_us is esp_timer_get_time() taken at the hardware event (button ISR,
+// Timing rule: every t_us is esp_timer_get_time() taken at the hardware event (touch-sensor ISR,
 // right after the LED frame is latched). Network timing is never used for reaction time.
 //
+// Targets: N_TARGETS (6) WS2812B rings, each with a digital touch sensor (e.g. TTP223) on its own GPIO.
+//
 // Libraries (Arduino Library Manager): espMqttClient (bertmelis), ArduinoJson 7,
-// Adafruit NeoPixel, Adafruit MCP23017 Arduino Library, Adafruit MPU6050.
+// Adafruit NeoPixel, Adafruit MPU6050.
 // Board: ESP32S3 Dev Module, Arduino-ESP32 core 3.x, PSRAM "OPI PSRAM" for N16R8.
 
 #include <Arduino.h>
@@ -22,7 +24,6 @@
 #include <espMqttClient.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
-#include <Adafruit_MCP23X17.h>
 #include "config.h"
 #if ENABLE_IMU
 #include <Adafruit_MPU6050.h>
@@ -32,7 +33,6 @@
 
 static espMqttClient mqtt;
 static Adafruit_NeoPixel strip(N_TARGETS * LEDS_PER_TARGET, LED_PIN, NEO_GRB + NEO_KHZ800);
-static Adafruit_MCP23X17 mcp;
 #if ENABLE_IMU
 static Adafruit_MPU6050 mpu;
 static bool imuOk = false;
@@ -49,14 +49,26 @@ static bool flushOfflinePending = false;
 
 static uint32_t seqEvents = 0, seqImu = 0, seqBal = 0;
 
-// --------------------------------------------------------------- button ISR (timestamp only)
-static volatile bool btnFlag = false;
-static volatile int64_t btnTimeUs = 0;
-static uint32_t lastPressMs[N_TARGETS];
+// --------------------------------------------------------------- touch ISR (timestamp only)
+// One interrupt per touch pin. The ISR stamps the time and queues (target, time); the main loop
+// classifies and publishes. A small queue keeps near-simultaneous touches on two targets apart.
+struct Touch { int64_t tUs; uint8_t target; };
+static const uint8_t TOUCH_QUEUE = 16;
+static Touch touchQ[TOUCH_QUEUE];
+static volatile uint8_t touchHead = 0, touchTail = 0;
+static portMUX_TYPE touchMux = portMUX_INITIALIZER_UNLOCKED;
+static int64_t lastTouchUs[N_TARGETS];
 
-void IRAM_ATTR onMcpInterrupt() {
-  btnTimeUs = esp_timer_get_time();  // the authoritative response timestamp
-  btnFlag = true;
+void IRAM_ATTR onTouch(void* arg) {
+  int64_t t = esp_timer_get_time();  // the authoritative response timestamp
+  portENTER_CRITICAL_ISR(&touchMux);
+  uint8_t next = (touchHead + 1) % TOUCH_QUEUE;
+  if (next != touchTail) {  // full queue only at impossible touch rates: drop
+    touchQ[touchHead].tUs = t;
+    touchQ[touchHead].target = (uint8_t)(uintptr_t)arg;
+    touchHead = next;
+  }
+  portEXIT_CRITICAL_ISR(&touchMux);
 }
 
 // --------------------------------------------------------------- trial block state
@@ -283,32 +295,34 @@ static void runBlock() {
   }
 }
 
-// Called from loop() after the ISR fired: find which button, classify, publish.
-static void handleButtons() {
-  if (!btnFlag) return;
-  noInterrupts();
-  int64_t tUs = btnTimeUs;
-  btnFlag = false;
-  interrupts();
+// Called from loop(): drain the touch queue, apply the lockout, classify, publish.
+static void handleTouches() {
+  while (true) {
+    Touch tc;
+    bool any = false;
+    portENTER_CRITICAL(&touchMux);
+    if (touchTail != touchHead) {
+      tc = touchQ[touchTail];
+      touchTail = (touchTail + 1) % TOUCH_QUEUE;
+      any = true;
+    }
+    portEXIT_CRITICAL(&touchMux);
+    if (!any) return;
 
-  uint8_t pin = mcp.getLastInterruptPin();
-  uint16_t captured = mcp.getCapturedInterrupt();  // pin levels at the moment of the interrupt
-  mcp.clearInterrupts();
-  if (pin >= N_TARGETS) return;
-  bool pressed = !(captured & (1u << pin));  // INPUT_PULLUP: pressed = LOW
-  if (!pressed) return;
-  uint32_t ms = millis();
-  if (ms - lastPressMs[pin] < BUTTON_DEBOUNCE_MS) return;
-  lastPressMs[pin] = ms;
+    uint8_t target = tc.target;
+    if (target >= N_TARGETS) continue;
+    if (lastTouchUs[target] && tc.tUs - lastTouchUs[target] < (int64_t)TOUCH_LOCKOUT_MS * 1000) continue;
+    lastTouchUs[target] = tc.tUs;
 
-  if (state == FOREPERIOD) {
-    publishEvent("false_start", tUs, trials[cur].trialNo, pin, nullptr, NAN, nullptr);
-    cntFalseStarts++;
-  } else if (state == STIMULUS) {
-    // Any press ends the trial; the server decides hit / wrong target / no-go false alarm.
-    publishEvent("response", tUs, trials[cur].trialNo, pin, nullptr, NAN, nullptr);
-    cntResponses++;
-    finishTrial();
+    if (state == FOREPERIOD) {
+      publishEvent("false_start", tc.tUs, trials[cur].trialNo, target, nullptr, NAN, nullptr);
+      cntFalseStarts++;
+    } else if (state == STIMULUS) {
+      // Any touch ends the trial; the server decides hit / wrong target / no-go false alarm.
+      publishEvent("response", tc.tUs, trials[cur].trialNo, target, nullptr, NAN, nullptr);
+      cntResponses++;
+      finishTrial();
+    }
   }
 }
 
@@ -580,15 +594,12 @@ void setup() {
   allOff();
 
   Wire.begin(I2C0_SDA, I2C0_SCL, 400000);
-  if (!mcp.begin_I2C(MCP_ADDR, &Wire)) Serial.println("[buttons] MCP23017 not found!");
-  mcp.setupInterrupts(true, false, LOW);  // mirror INTA/INTB, push-pull, active low
+  // Touch sensors: TTP223 modules calibrate at power-on, so keep hands off the pads while booting.
   for (int i = 0; i < N_TARGETS; i++) {
-    mcp.pinMode(i, INPUT_PULLUP);
-    mcp.setupInterruptPin(i, CHANGE);
+    pinMode(TOUCH_PINS[i], TOUCH_ACTIVE_HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);
+    attachInterruptArg(digitalPinToInterrupt(TOUCH_PINS[i]), onTouch, (void*)(uintptr_t)i,
+                       TOUCH_ACTIVE_HIGH ? RISING : FALLING);
   }
-  mcp.clearInterrupts();
-  pinMode(MCP_INT_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(MCP_INT_PIN), onMcpInterrupt, FALLING);
 
 #if ENABLE_IMU
   imuOk = mpu.begin(0x68, &Wire);
@@ -634,7 +645,7 @@ void loop() {
   mqtt.loop();
   maintainConnection();
   if (flushOfflinePending) flushOffline();
-  handleButtons();
+  handleTouches();
   runBlock();
 #if ENABLE_IMU
   sampleImu();
